@@ -14,18 +14,23 @@ EulerTest = TestCase("EulerTest");
 EulerTest.prototype.testInitialStep = function(){
 // y'=y and y(0)=1 dt=1
 // y1 = 2, y2 = 4, y3 = 8
-    var expectedValues = [[1],[2],[4],[8]];
-    var y0 = expectedValues[0];
-    var result;
+    var s = Object.create(solver);
+    var expectedValues = [[2],[4],[8]];
+    var y0 = [1];
     var h = 1;
+    var result;
+
     var de = function(t,y){
-        return y;
+        var ydot = [];
+        ydot[0] = y[0];
+        return ydot;
     };
 
     for(var i = 0; i < expectedValues.length; i++){
-        result = solver.eulerStep(de,i,[y0],h);
+
+        result = s.eulerStep(de,i,y0,h);
         for(var j = 0; j < result.length; j++){
-            assertEquals("First 4 values for the solution of y'=y, y0=1; h=1",expectedValues[i+1][j],result[j]);
+            assertEquals("The first 3 values for using Euler's method to solve y' = y, y0 = 1, h = 1 should be [2,4,8]",expectedValues[i][j],result[j]);
         }
         y0 = result;
     }

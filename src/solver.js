@@ -42,9 +42,10 @@ var solver = (function(){
         var yn = ydot(t, y);
         var step = [];
         for(var i = 0; i < yn.length; i++){
-           step.push(y[i]+(yn[i] * dt));
+           step[i] = y[i]+(yn[i] * dt);
         }
         return step;
     };
+    return s;
 
 }());
