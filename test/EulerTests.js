@@ -31,7 +31,51 @@ EulerTest.prototype.testInitialStep = function(){
         result = s.eulerStep(de,i,y0,h);
         for(var j = 0; j < result.length; j++){
             assertEquals("The first 3 values for using Euler's method to solve y' = y, y0 = 1, h = 1 should be [2,4,8]",expectedValues[i][j],result[j]);
+            console.log("test");
         }
         y0 = result;
     }
+
+    var validArray = [];
+    var invalidArray = [];
+    var n;
+    for(var i = 0; i < 100; i++){
+        n = Math.random() * 10;
+        validArray.push(n);
+        invalidArray.push(n);
+    }
+    invalidArray.push(Number.NaN);
+    for(var i = 0; i < 100; i++){
+        n = Math.random() * -10;
+        validArray.push(n);
+        invalidArray.push(n);
+    }
+    invalidArray.push(Number.NEGATIVE_INFINITY);
+    assertNoException(Verify.value(validArray).always().isArray().ofFiniteNumbers(), "Array should not cause any exceptions.");
+    //assertNoException(Verify.value(invalidArray).always().isArray().ofFiniteNumbers(), "Array contains -INF and NaN and should trigger an exception.");
+    console.log("test");
+    console.log("hello");
+};
+
+EulerTest.prototype.isArrayOfNumbers = function(){
+   /* //var verify = Object.create(Verify);
+    var validArray = [];
+    var invalidArray = [];
+    var n;
+    for(var i = 0; i < 100; i++){
+        n = Math.random() * 10;
+        validArray.push(n);
+        invalidArray.push(n);
+    }
+    invalidArray.push(Number.NaN);
+    for(var i = 0; i < 100; i++){
+        n = Math.random() * -10;
+        validArray.push(n);
+        invalidArray.push(n);
+    }
+    invalidArray.push(Number.NEGATIVE_INFINITY);
+    assertNoException(Verify.value(validArray).always().isArray().ofFiniteNumbers(), "Array should not cause any exceptions.");
+    //assertNoException(Verify.value(invalidArray).always().isArray().ofFiniteNumbers(), "Array contains -INF and NaN and should trigger an exception.");
+    console.log("test");*/
+    console.log("hello");
 };
