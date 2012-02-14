@@ -22,9 +22,10 @@ var Verify = (function () {
         return typeof (value) !== "undefined" && value !== null;
     }
 
-    function throwExceptionIf(condition, message) {
+    function throwExceptionIf(condition, message, type) {
+        var errorType = type || Error;
         if (condition) {
-            throw {message:message};
+            throw new errorType({message:message});
         }
     }
 
@@ -45,30 +46,30 @@ var Verify = (function () {
         withLengthOf:function (length) {
             var value = _value;
             var name = _name;
-            throwExceptionIf(typeof (length) !== "number", "Specified length must be a 'Number'.");
-            throwExceptionIf(hasValue(value) && value.length !== length, "The length of " + name + " must be exactly " + length + ".");
+            throwExceptionIf(typeof (length) !== "number", "Specified length must be a 'Number'.", TypeError);
+            throwExceptionIf(hasValue(value) && value.length !== length, "The length of " + name + " must be exactly " + length + ".", RangeError);
             return _arrayVerifier;
         },
         withMinimumLengthOf:function (length) {
             var value = _value;
             var name = _name;
-            throwExceptionIf(typeof (length) !== "number", "Specified length must be a 'Number'.");
-            throwExceptionIf(hasValue(value) && value.length < length, "The length of " + name + " must be at least " + length + ".");
+            throwExceptionIf(typeof (length) !== "number", "Specified length must be a 'Number'.", TypeError);
+            throwExceptionIf(hasValue(value) && value.length < length, "The length of " + name + " must be at least " + length + ".", RangeError);
             return _arrayVerifier;
         },
         withMaximumLengthOf:function (length) {
             var value = _value;
             var name = _name;
-            throwExceptionIf(typeof (length) !== "number", "Specified length must be a 'Number'.");
-            throwExceptionIf(hasValue(value) && value.length > length, "The length of " + name + " must be less than " + length + ".");
+            throwExceptionIf(typeof (length) !== "number", "Specified length must be a 'Number'.", TypeError);
+            throwExceptionIf(hasValue(value) && value.length > length, "The length of " + name + " must be less than " + length + ".", RangeError);
             return _arrayVerifier;
         },
         ofFiniteNumbers: function(){
             var value = _value;
             var name = _name;
             value.forEach(function(value, index, array){
-                throwExceptionIf(hasValue(value) && typeof (value) !== "number", "Value at index:" + index.toString() + " must be a number.");
-                throwExceptionIf(!isFinite(value), "Value at index: " + index.toString() + " must be a finite number.");
+                throwExceptionIf(hasValue(value) && typeof (value) !== "number", "Value at index:" + index.toString() + " must be a number.", TypeError);
+                throwExceptionIf(!isFinite(value), "Value at index: " + index.toString() + " must be a finite number.", TypeError);
             });
             return _arrayVerifier;
         }
@@ -83,8 +84,8 @@ var Verify = (function () {
             var name = _name;
             var valueSpecified = hasValue(value);
 
-            throwExceptionIf(valueSpecified && typeof (value) !== typeof (val), "Comparison value must be of the same type.");
-            throwExceptionIf(valueSpecified && value >= val, name + " must be less than '" + val + "'.");
+            throwExceptionIf(valueSpecified && typeof (value) !== typeof (val), "Comparison value must be of the same type.", TypeError);
+            throwExceptionIf(valueSpecified && value >= val, name + " must be less than '" + val + "'.", RangeError);
 
             return _comparableVerifier;
         },
@@ -93,8 +94,8 @@ var Verify = (function () {
             var name = _name;
             var valueSpecified = hasValue(value);
 
-            throwExceptionIf(valueSpecified && typeof (value) !== typeof (val), "Comparison value must be of the same type.");
-            throwExceptionIf(valueSpecified && value > val, name + " must be less than or equal to '" + val + "'.");
+            throwExceptionIf(valueSpecified && typeof (value) !== typeof (val), "Comparison value must be of the same type.", TypeError);
+            throwExceptionIf(valueSpecified && value > val, name + " must be less than or equal to '" + val + "'.", RangeError);
 
             return _comparableVerifier;
         },
@@ -103,8 +104,8 @@ var Verify = (function () {
             var name = _name;
             var valueSpecified = hasValue(value);
 
-            throwExceptionIf(valueSpecified && typeof (value) !== typeof (val), "Comparison value must be of the same type.");
-            throwExceptionIf(valueSpecified && value != val, name + " must be equal to '" + val + "'.");
+            throwExceptionIf(valueSpecified && typeof (value) !== typeof (val), "Comparison value must be of the same type.", TypeError);
+            throwExceptionIf(valueSpecified && value != val, name + " must be equal to '" + val + "'.", RangeError);
 
             return _comparableVerifier;
         },
@@ -113,8 +114,8 @@ var Verify = (function () {
             var name = _name;
             var valueSpecified = hasValue(value);
 
-            throwExceptionIf(valueSpecified && typeof (value) !== typeof (val), "Comparison value must be of the same type.");
-            throwExceptionIf(valueSpecified && value == val, name + " must not be equal to '" + val + "'.");
+            throwExceptionIf(valueSpecified && typeof (value) !== typeof (val), "Comparison value must be of the same type.", TypeError);
+            throwExceptionIf(valueSpecified && value == val, name + " must not be equal to '" + val + "'.", RangeError);
 
             return _comparableVerifier;
         },
@@ -123,8 +124,8 @@ var Verify = (function () {
             var name = _name;
             var valueSpecified = hasValue(value);
 
-            throwExceptionIf(valueSpecified && typeof (value) !== typeof (val), "Comparison value must be of the same type.");
-            throwExceptionIf(valueSpecified && value < val, name + " must be greater than or equal to '" + val + "'.");
+            throwExceptionIf(valueSpecified && typeof (value) !== typeof (val), "Comparison value must be of the same type.", TypeError);
+            throwExceptionIf(valueSpecified && value < val, name + " must be greater than or equal to '" + val + "'.", RangeError);
 
             return _comparableVerifier;
         },
@@ -133,8 +134,8 @@ var Verify = (function () {
             var name = _name;
             var valueSpecified = hasValue(value);
 
-            throwExceptionIf(valueSpecified && typeof (value) !== typeof (val), "Comparison value must be of the same type.");
-            throwExceptionIf(valueSpecified && value <= val, name + " must be greater than '" + val + "'.");
+            throwExceptionIf(valueSpecified && typeof (value) !== typeof (val), "Comparison value must be of the same type.", TypeError);
+            throwExceptionIf(valueSpecified && value <= val, name + " must be greater than '" + val + "'.", RangeError);
 
             return _comparableVerifier;
         },
@@ -143,9 +144,9 @@ var Verify = (function () {
             var name = _name;
             var valueSpecified = hasValue(value);
 
-            throwExceptionIf(valueSpecified && typeof (value) !== typeof (lowerBound), "Comparison lowerBound must be of the same type.");
-            throwExceptionIf(valueSpecified && typeof (value) !== typeof (upperBound), "Comparison upperBound must be of the same type.");
-            throwExceptionIf(valueSpecified && (value < lowerBound || value > upperBound), name + " must be between '" + lowerBound + "' and '" + upperBound + "'.");
+            throwExceptionIf(valueSpecified && typeof (value) !== typeof (lowerBound), "Comparison lowerBound must be of the same type.", TypeError);
+            throwExceptionIf(valueSpecified && typeof (value) !== typeof (upperBound), "Comparison upperBound must be of the same type.", TypeError);
+            throwExceptionIf(valueSpecified && (value < lowerBound || value > upperBound), name + " must be between '" + lowerBound + "' and '" + upperBound + "'.", RangeError);
 
             return _comparableVerifier;
         },
@@ -153,7 +154,7 @@ var Verify = (function () {
             var value = _value;
             var name = _name;
 
-            throwExceptionIf(!isFinite(value), name + " must be a finite number.");
+            throwExceptionIf(!isFinite(value), name + " must be a finite number.", RangeError);
             return _comparableVerifier;
         }
     };
@@ -168,41 +169,41 @@ var Verify = (function () {
         isArray:function () {
             var value = _value;
             var name = _name;
-            throwExceptionIf(hasValue(value) && !(value instanceof Array), name + " must of type 'Array'.");
+            throwExceptionIf(hasValue(value) && !(value instanceof Array), name + " must of type 'Array'.", TypeError);
             return _arrayVerifier;
         },
         isBoolean:function () {
             var value = _value;
             var name = _name;
-            throwExceptionIf(hasValue(value) && typeof (value) !== "boolean", name + " must be of type 'Boolean'.");
+            throwExceptionIf(hasValue(value) && typeof (value) !== "boolean", name + " must be of type 'Boolean'.", TypeError);
             return _defaultVerifier;
         },
         isFunction:function () {
             var value = _value;
             var name = _name;
-            throwExceptionIf(hasValue(value) && typeof (value) !== "function", name + " must be a function.");
+            throwExceptionIf(hasValue(value) && typeof (value) !== "function", name + " must be a function.", TypeError);
             return _defaultVerifier;
         },
         isInstanceOf:function (type) {
             var value = _value;
             var name = _name;
-            throwExceptionIf(hasValue(value) && !((value) instanceof type), name + " must be of specified type: " + type.toString());
+            throwExceptionIf(hasValue(value) && !((value) instanceof type), name + " must be of specified type: " + type.toString(), TypeError);
             return _defaultVerifier;
         },
         isNumber:function () {
             var value = _value;
             var name = _name;
-            throwExceptionIf(hasValue(value) && typeof (value) !== "number", name + " must be of type 'Number'.");
+            throwExceptionIf(hasValue(value) && typeof (value) !== "number", name + " must be of type 'Number'.", TypeError);
             return _comparableVerifier;
         },
         isObject:function () {
             var value = _value;
             var name = _name;
-            throwExceptionIf(hasValue(value) && typeof (value) !== "object", name + " must be of type 'Object'.");
+            throwExceptionIf(hasValue(value) && typeof (value) !== "object", name + " must be of type 'Object'.", TypeError);
             return _defaultVerifier;
         }
     };
-    var _requiredVeifier = {
+    var _requiredVerifier = {
         type:"RequiredVerifier",
         getValue:function () {
             return _value;
@@ -210,13 +211,13 @@ var Verify = (function () {
         always:function () {
             var value = _value;
             var name = _name;
-            throwExceptionIf(typeof (value) === "undefined" || value === null, name + " must not be null or undefined.");
+            throwExceptionIf(typeof (value) === "undefined" || value === null, name + " must not be null or undefined.", ReferenceError);
             return _typeVerifier;
         },
         whenDefined:function () {
             var value = _value;
             var name = _name;
-            throwExceptionIf(value === null, name + " must not be null.");
+            throwExceptionIf(value === null, name + " must not be null.", ReferenceError);
             return _typeVerifier;
         },
         whenHasValue:function () {
@@ -225,7 +226,7 @@ var Verify = (function () {
         whenNotNull:function () {
             var type = _type;
             var name = _name;
-            throwExceptionIf(typeof (value) === "undefined", name + " must not be undefined.");
+            throwExceptionIf(typeof (value) === "undefined", name + " must not be undefined.", ReferenceError);
             return _typeVerifier;
         }
     };
