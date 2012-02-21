@@ -43,8 +43,8 @@ var solver = (function () {
 
             for (var dim = 0; dim < ndims; dim++) {
                 soln.push([y0[dim]]);
-                timevals.push(t0);
             }
+            timevals.push(t0);
 
             var currentValue = y0;
             var dt = stepSize;
@@ -55,8 +55,8 @@ var solver = (function () {
 
                 for (var dim = 0; dim < ndims; dim++) {
                     soln[dim].push([currentValue[dim]]);
-                    timevals.push(t+dt);
                 }
+                timevals.push(t+dt);
             }
             results.y = soln;
             results.t = timevals;
