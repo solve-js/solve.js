@@ -22,7 +22,8 @@ var solver = (function () {
      * @param {Number} stepSize The width used for calculating each step in the integration.
      * @param {Function} [integrator] Optional function that will be used for calculating steps in the integration. If a function is not supplied, the library will use the default method (Euler's).
      *
-     * @returns {Array[]} Returns an n-dimensional array where each dimension contains an array of [time, value] pairs.
+     * @returns {Object} Returns an object with two properties: t is an array filled with the time values at which the DE was solved;
+     * y is an n-dimensional array where each dimension is an array of values with length 't' containing the soluton to the differential equation.
      */
     s.solve = function (deFunction, y0, t0, tf, stepSize, integrator) {
         "use strict"
@@ -34,30 +35,35 @@ var solver = (function () {
             Verify.value(stepSize, "stepSize").always().isNumber().lessThan(Math.abs(tf - t0));
             Verify.value(integrator, "integrator").whenDefined().isFunction();
 
+            var results = {y: [], t: []};
             var stepper = integrator || s.eulerStep;
             var ndims = y0.length;
             var soln = [];
-            for (var i = 0; i < ndims; i++) {
-                soln.push([
-                    [t0, y0[i]]
-                ]);
+            var timevals = [];
+
+            for (var dim = 0; dim < ndims; dim++) {
+                soln.push([y0[dim]]);
+                timevals.push(t0);
             }
 
-
-            var y = y0;
+            var currentValue = y0;
             var dt = stepSize;
 
             for (var t = t0; t < tf; t += dt) {
-                var step = integrator(deFunction, t, y, dt);
-                y = step;
+                var step = stepper(deFunction, t, currentValue, dt);
+                currentValue = step;
 
                 for (var dim = 0; dim < ndims; dim++) {
-                    soln[dim].push([t + dt, y[dim]]);
+                    soln[dim].push([currentValue[dim]]);
+                    timevals.push(t+dt);
                 }
             }
-            return soln;
+            results.y = soln;
+            results.t = timevals;
+            return results;
         } catch (e) {
             console.log(e);
+            throw e;
         }
     };
 
@@ -92,13 +98,24 @@ var solver = (function () {
     s.eulerStep = function (ydot, t, y, dt) {
         "use strict"
         //ydot and y could have multiple dimensions, we'll expect each to be an array of length n
-        var yn = ydot(t, y);
-        var step = [];
-        for (var i = 0; i < yn.length; i++) {
-            step[i] = y[i] + (yn[i] * dt);
+
+        try {
+            var step = [];
+            var yn = ydot(t, y);
+
+            //Step cannot result in a NaN or Infinity
+            Verify.value(yn, "Yn").always().isArray().ofFiniteNumbers();
+
+            for (var i = 0; i < yn.length; i++) {
+                step[i] = y[i] + (yn[i] * dt);
+            }
+            return step;
+        } catch (e) {
+            throw e;
         }
-        return step;
     };
+
+
     return s;
 
 }());

@@ -11,20 +11,44 @@
 
 EulerTest = TestCase("EulerTest");
 
+/**
+ * Try to add frequently used functions/objects in the parent TestCase object so they don't get created/destroyed
+ * over and over again with each test.
+ */
+EulerTest.prototype.setUp = function () {
+    this.solve = Object.create(solver);
+    this.simpleDE = {
+        func:function (t, y) {
+            var ydot = [];
+            ydot[0] = y[0];
+            return ydot;
+        },
+        y0:[1],
+        expectedValues:[
+            [2],
+            [4],
+            [8]
+        ],
+        stepSize:1
+    };
+};
+
+
+/**
+ * Test of a simple differential equation: y' = y, where y(0) = 1, and dt = 1
+ * Uses Euler's Method to evaluate the next 3 steps of the solution and checks this against the expected value.
+ * You can easily check these expected values by working through Euler's method by hand.
+ * y(1) = 2, y(2) = 4, y(3) = 8
+ */
 EulerTest.prototype.testInitialStep = function(){
-// y'=y and y(0)=1 dt=1
-// y1 = 2, y2 = 4, y3 = 8
-    var s = Object.create(solver);
-    var expectedValues = [[2],[4],[8]];
-    var y0 = [1];
-    var h = 1;
+    var s = this.solve;
+    var expectedValues = this.simpleDE.expectedValues;
+    var y0 = this.simpleDE.y0;
+    var h = this.simpleDE.stepSize;
+    var de = this.simpleDE.func;
     var result;
 
-    var de = function(t,y){
-        var ydot = [];
-        ydot[0] = y[0];
-        return ydot;
-    };
+
 
     for(var i = 0; i < expectedValues.length; i++){
 
@@ -34,4 +58,35 @@ EulerTest.prototype.testInitialStep = function(){
         }
         y0 = result;
     }
+};
+
+EulerTest.prototype.testSolverFunction = function(){
+    var s = this.solve;
+    var func = this.simpleDE.func;
+    var initialCond = this.simpleDE.y0;
+    var startTime = 0;
+    var endTime = 100;
+    var stepSize = 1;
+
+    var result = s.solve(func, initialCond, startTime, endTime, stepSize);
+    result.y.forEach(function(value, index, array){
+        assertEquals("Length of time vector and all solutions should be equal", result.t.length, value.length);
+    });
+};
+
+/**
+ * Test to check the behavior of the Euler stepper function. We do not allow steps to be NaN or Infinity,
+ * and an exception should be thrown if these values occur.
+ */
+EulerTest.prototype.testInvalidStepResults = function(){
+    var invalidResultsFunction = function(t,y){
+        var ydot = [1,3,5,7,Number.NaN];
+        return ydot;
+    };
+
+    var s = this.solve;
+    var validDE = this.simpleDE.func;
+
+    assertException("Functions representing differential equations may not return NaN or +/- Infinity", function(){return s.eulerStep(invalidResultsFunction, 1,[3], .5);}, new TypeError() );
+    assertNoException("Differential Equations may return any number other than NaN or +/- Infinity", function(){return s.eulerStep(validDE, 0, [1],1);});
 };
