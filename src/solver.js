@@ -67,23 +67,58 @@ var solver = (function () {
         }
     };
 
-    s.createTimeVector = function (start, end, increment) {
+
+    /**
+     * @description
+     * <p>
+     *     Generates an array of time points starting at 't0' and ending at 'tf', with points separated by 'increment'.
+     *     If the time values are increasing (t0 < tf), the increment must be positive. If the time values are decreasing (t0 > tf), the increment must be negative.
+     * </p>
+     *
+     * @param {Number} t0 The starting value for your time vector
+     * @param {Number} tf The end value for your time vector
+     * @param {Number} increment The size of the increment between values in the vector.
+     * Note: if your t0 value is *greater* than your tf value (i.e. you're going backwards in time), the value of the increment *must* be negative
+     *
+     */
+    s.createTimeVector = function (t0, tf, increment) {
         "use strict"
         var t = [];
-        var i = increment;
-        var e = end;
-        var s = start;
-        if (start < end) {
-            for (s; s < e; s += i) {
-                t.push(s);
-            }
+        var inc = increment;
+        var end = tf;
+        var start = t0;
+        var dError;
+
+        Verify.value(start, "start").always().isNumber().isFinite();
+        Verify.value(end, "end").always().isNumber().isFinite().notEqualTo(start);
+        Verify.value(inc, "increment").always().isNumber().isFinite().lessThan(Math.abs(start-end));
+
+        if(start < end){
+            Verify.value(inc, "increment").always().isNumber().greaterThan(0);
+        } else {
+            Verify.value(inc, "increment").always().isNumber().lessThan(0);
         }
-        else {
-            for (s; s > e; s -= i) {
-                t.push(s);
+            var lhs = [];
+            var rhs = [];
+            var numpoints = Math.ceil((end-start)/inc);
+            var midpoint = Math.floor(numpoints/2);
+            var i;
+            var offset;
+            for(i = 0; i < midpoint; i++){
+                offset = inc*i;
+                lhs.push(start + offset);
+                rhs.unshift(end - offset);
             }
-        }
-        return t;
+            if(numpoints % 2 === 0){
+                lhs.push((start+end)/2);
+            } else {
+                offset = inc * midpoint;
+                lhs.push(start + offset);
+                rhs.unshift(end - offset);
+            }
+
+            t = lhs.concat(rhs);
+            return t;
     };
 
     /**
