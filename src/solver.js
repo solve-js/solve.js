@@ -35,7 +35,7 @@ var solver = (function () {
             Verify.value(stepSize, "stepSize").always().isNumber().lessThan(Math.abs(tf - t0));
             Verify.value(integrator, "integrator").whenDefined().isFunction();
 
-            var results = {y: [], t: []};
+            var results = {y:[], t:[]};
             var stepper = integrator || s.eulerStep;
             var ndims = y0.length;
             var soln = [];
@@ -56,7 +56,7 @@ var solver = (function () {
                 for (var dim = 0; dim < ndims; dim++) {
                     soln[dim].push([currentValue[dim]]);
                 }
-                timevals.push(t+dt);
+                timevals.push(t + dt);
             }
             results.y = soln;
             results.t = timevals;
@@ -91,34 +91,34 @@ var solver = (function () {
 
         Verify.value(start, "start").always().isNumber().isFinite();
         Verify.value(end, "end").always().isNumber().isFinite().notEqualTo(start);
-        Verify.value(inc, "increment").always().isNumber().isFinite().lessThan(Math.abs(start-end));
+        Verify.value(inc, "increment").always().isNumber().isFinite().lessThan(Math.abs(start - end));
 
-        if(start < end){
+        if (start < end) {
             Verify.value(inc, "increment").always().isNumber().greaterThan(0);
         } else {
             Verify.value(inc, "increment").always().isNumber().lessThan(0);
         }
-            var lhs = [];
-            var rhs = [];
-            var numpoints = Math.ceil((end-start)/inc);
-            var midpoint = Math.floor(numpoints/2);
-            var i;
-            var offset;
-            for(i = 0; i < midpoint; i++){
-                offset = inc*i;
-                lhs.push(start + offset);
-                rhs.unshift(end - offset);
-            }
-            if(numpoints % 2 === 0){
-                lhs.push((start+end)/2);
-            } else {
-                offset = inc * midpoint;
-                lhs.push(start + offset);
-                rhs.unshift(end - offset);
-            }
+        var lhs = [];
+        var rhs = [];
+        var numpoints = Math.ceil((end - start) / inc);
+        var midpoint = Math.floor(numpoints / 2);
+        var i;
+        var offset;
+        for (i = 0; i < midpoint; i++) {
+            offset = inc * i;
+            lhs.push(start + offset);
+            rhs.unshift(end - offset);
+        }
+        if (numpoints % 2 === 0) {
+            lhs.push((start + end) / 2);
+        } else {
+            offset = inc * midpoint;
+            lhs.push(start + offset);
+            rhs.unshift(end - offset);
+        }
 
-            t = lhs.concat(rhs);
-            return t;
+        t = lhs.concat(rhs);
+        return t;
     };
 
     /**
@@ -135,16 +135,16 @@ var solver = (function () {
         //ydot and y could have multiple dimensions, we'll expect each to be an array of length n
 
         try {
-            var step = [];
+            var nextStep = [];
             var yn = ydot(t, y);
 
             //Step cannot result in a NaN or Infinity
             Verify.value(yn, "Yn").always().isArray().ofFiniteNumbers();
 
             for (var i = 0; i < yn.length; i++) {
-                step[i] = y[i] + (yn[i] * dt);
+                nextStep[i] = y[i] + (yn[i] * dt);
             }
-            return step;
+            return nextStep;
         } catch (e) {
             throw e;
         }
@@ -169,6 +169,79 @@ var solver = (function () {
     	
     	var yNext =  y + (35/384)*k1 + (500/1113)*k3 + (125/192)* k4 - (2187/6784)* k5 + (11/84)* k6;
     	return yNext;
+    };
+
+    s.dormandPrinceStep = function (ydot, t, y, h) {
+        "use strict"
+        try {
+            var nextStep;
+
+            var k1 = ydot(t, y);
+            var y2 = [];
+            k1.forEach(function (value, i, k) {
+                var ki = value * h;
+                k[i] = ki;
+                y2[i] = y[i] + 0.2 * ki;
+            });
+
+
+            var k2 = ydot(t + 0.2 * h, y2);
+            var y3 = [];
+            k2.forEach(function (value, i, k) {
+                var ki = value * h;
+                k[i] = ki;
+                y3[i] = y[i] + (3 / 40) * k1[i] + (9 / 40) * ki;
+            });
+
+            var k3 = ydot(t + 0.3 * h, y3);
+            var y4 = [];
+            k3.forEach(function(value, i, k){
+                var ki = value * h;
+                k[i] = ki;
+                y4[i] = y[i] + (44 / 45) * k1[i] - (56 / 15) * k2[i] + (32 / 9) * k3[i];
+            });
+
+            var k4 = ydot(t + 0.8 * h, y4);
+            var y5 = [];
+            k4.forEach(function(value, i, k){
+                var ki = value * h;
+                k[i] = ki;
+                y5[i] = y[i] + (19372 / 6561) * k1[i] - (25360 / 2187) * k2[i] + (64448 / 6561) * k3[i] - (212 / 729) * k4[i];
+            });
+
+            var k5 = ydot(t + (8 / 9) * h, y5);
+            var y6 = [];
+            k5.forEach(function(value, i, k){
+                var ki = value * h;
+                k[i] = ki;
+                y6[i] = y[i] + (9017 / 3168) * k1[i] - (355 / 33) * k2[i] - (46732 / 5247) * k3[i] + (49 / 176) * k4[i] - (5103 / 18656) * k5[i];
+            });
+
+            var k6 = ydot(t + h, y6);
+            var y7 = [];
+            k6.forEach(function(value, i, k){
+                var ki = value *h;
+                k[i] = ki;
+                y7[i] = y[i] + (35 / 384) * k1[i] + (500 / 1113) * k3[i] + (125 / 192) * k4[i] - (2187 / 6784) * k5[i] + (11 / 84) * k6[i];
+            });
+
+            nextStep = y7;
+
+            var k7 = ydot(t + h, y7);
+            var error = [];
+            k7.forEach(function(value, i, k){
+                var ki = value * h;
+                k[i] = ki;
+                error[i] = Math.abs(nextStep[i] - (y[i] + (5179/57600) * k1[i] + (7571/16695) * k3[i] + (393/640) * k4[i] - (92097/339200) * k5[i] + (187/2100) * k6[i] + (1/40) * k7[i]));
+            });
+
+            return {
+                y: y7,
+                error: error
+            };
+        } catch (e){
+            throw e;
+        }
     };
 
 
