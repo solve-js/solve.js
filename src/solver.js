@@ -171,7 +171,16 @@ var solver = (function () {
     	return yNext;
     };
 
-    s.dormandPrinceStep = function (ydot, t, y, h) {
+    /**
+     * Calculates the next step in the solution of the Differential Equation using the Dormand-Prince method
+     * @param {Function} ydot The function representing the Differential Equation that is being solved
+     * @param {Number} t The time value at which the DE is being evaluated for this step
+     * @param {Number[]} y An array containing the previous value(s) for the integrated DE. Should always be in an array, even if there is only one value.
+     * @param {Number} dt The size of the step to be used in calculating this next step of the integration.
+     * @return {Object} Returns an object containing two properties: 'y' and 'error'. 'y' is an array containing the calculated next step for each dimension in the system of Differential Equations.
+     * 'error' contains an array containing the calculated error for each of the steps returned in 'y'.
+     */
+    s.dormandPrinceStep = function (ydot, t, y, dt) {
         "use strict"
         try {
             var nextStep;
@@ -179,67 +188,95 @@ var solver = (function () {
             var k1 = ydot(t, y);
             var y2 = [];
             k1.forEach(function (value, i, k) {
-                var ki = value * h;
+                var ki = value * dt;
                 k[i] = ki;
                 y2[i] = y[i] + 0.2 * ki;
             });
 
 
-            var k2 = ydot(t + 0.2 * h, y2);
+            var k2 = ydot(t + 0.2 * dt, y2);
             var y3 = [];
             k2.forEach(function (value, i, k) {
-                var ki = value * h;
+                var ki = value * dt;
                 k[i] = ki;
                 y3[i] = y[i] + (3 / 40) * k1[i] + (9 / 40) * ki;
             });
 
-            var k3 = ydot(t + 0.3 * h, y3);
+            var k3 = ydot(t + 0.3 * dt, y3);
             var y4 = [];
-            k3.forEach(function(value, i, k){
-                var ki = value * h;
+            k3.forEach(function (value, i, k) {
+                var ki = value * dt;
                 k[i] = ki;
                 y4[i] = y[i] + (44 / 45) * k1[i] - (56 / 15) * k2[i] + (32 / 9) * k3[i];
             });
 
-            var k4 = ydot(t + 0.8 * h, y4);
+            var k4 = ydot(t + 0.8 * dt, y4);
             var y5 = [];
-            k4.forEach(function(value, i, k){
-                var ki = value * h;
+            k4.forEach(function (value, i, k) {
+                var ki = value * dt;
                 k[i] = ki;
                 y5[i] = y[i] + (19372 / 6561) * k1[i] - (25360 / 2187) * k2[i] + (64448 / 6561) * k3[i] - (212 / 729) * k4[i];
             });
 
-            var k5 = ydot(t + (8 / 9) * h, y5);
+            var k5 = ydot(t + (8 / 9) * dt, y5);
             var y6 = [];
-            k5.forEach(function(value, i, k){
-                var ki = value * h;
+            k5.forEach(function (value, i, k) {
+                var ki = value * dt;
                 k[i] = ki;
                 y6[i] = y[i] + (9017 / 3168) * k1[i] - (355 / 33) * k2[i] - (46732 / 5247) * k3[i] + (49 / 176) * k4[i] - (5103 / 18656) * k5[i];
             });
 
-            var k6 = ydot(t + h, y6);
+            var k6 = ydot(t + dt, y6);
             var y7 = [];
-            k6.forEach(function(value, i, k){
-                var ki = value *h;
+            k6.forEach(function (value, i, k) {
+                var ki = value * dt;
                 k[i] = ki;
                 y7[i] = y[i] + (35 / 384) * k1[i] + (500 / 1113) * k3[i] + (125 / 192) * k4[i] - (2187 / 6784) * k5[i] + (11 / 84) * k6[i];
             });
 
             nextStep = y7;
 
-            var k7 = ydot(t + h, y7);
+            var k7 = ydot(t + dt, y7);
             var error = [];
-            k7.forEach(function(value, i, k){
-                var ki = value * h;
+            k7.forEach(function (value, i, k) {
+                var ki = value * dt;
                 k[i] = ki;
-                error[i] = Math.abs(nextStep[i] - (y[i] + (5179/57600) * k1[i] + (7571/16695) * k3[i] + (393/640) * k4[i] - (92097/339200) * k5[i] + (187/2100) * k6[i] + (1/40) * k7[i]));
+                error[i] = Math.abs(nextStep[i] - (y[i] + (5179 / 57600) * k1[i] + (7571 / 16695) * k3[i] + (393 / 640) * k4[i] - (92097 / 339200) * k5[i] + (187 / 2100) * k6[i] + (1 / 40) * k7[i]));
             });
 
             return {
-                y: y7,
-                error: error
+                y:y7,
+                error:error
             };
-        } catch (e){
+        } catch (e) {
+            throw e;
+        }
+    };
+
+    /**
+     * Calculates the optimum size of the next step based on the error calculated for the current step. If a multi-dimensional
+     * system is being solved, it returns the smallest optimal time value.
+     * @param {Number} dtCurrent The current step size.
+     * @param {Number[]} calcError An array containing the calculated 5th-order error for each dimension in the current step.
+     * @param {Number} tolerance The desired error tolerance.
+     * @return {Number} Returns the calculated optimal next time step
+     */
+    s.getNextTimeStep = function (dtCurrent, calcError, tolerance) {
+        "use strict"
+        try {
+            var dtOpt = [];
+            Verify.value(dtCurrent, "dtCurrent").always().isNumber().isFinite();
+            Verify.value(calcError, "calcError").always().isArray().ofFiniteNumbers();
+            Verify.value(tolerance, "tolerance").always().isNumber().isFinite();
+
+            calcError.forEach(function (value, i, a) {
+                var s = Math.pow((tolerance * dtCurrent) / (2 * value), (1 / 5));
+                dtOpt[i] = s * dtCurrent;
+            });
+
+            var dtNext = Math.min.apply(Math, dtOpt);
+            return dtNext;
+        } catch (e) {
             throw e;
         }
     };
