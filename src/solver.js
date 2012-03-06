@@ -98,6 +98,27 @@ var solver = (function () {
             step[i] = y[i] + (yn[i] * dt);
         }
         return step;
+    }; 
+    /**
+     * @function
+     * @param {Function} ydot The function representing the Differential Equation that is being solved
+     * @param {Number} t The time value at which the DE is being evaluated for this step
+     * @param {Number} y Last value of y
+     * @param {Number} h The size of the step to be used in calculating this next step of the integration.
+     * 
+     * @returns {Number} yNext The next step of y
+     */
+    s.dPrinceMethodOneStep = function(ydot,t,y,h){
+    	var k1 = h*ydot(t,y);
+    	var k2 = h*ydot(t + 0.2*h, y + 0.2*k1);
+    	var k3 = h*ydot(t + 0.3*h, y + (3/40)*k1 + (9/40)*k2);
+    	var k4 = h*ydot(t + 0.8*h, y + (44/45)*k1 - (56/15)*k2 + (32/9)* k3);
+    	var k5 = h*ydot(t + (8/9)*h, y + (19372/6561)*k1 - (25360/2187)*k2 + (64448/6561)* k3 - (212/729)*k4);
+    	var k6 = h*ydot(t + h, y + (9017/3168)*k1 - (355/33)*k2 - (46732/5247)* k3 + (49/176)*k4 - (5103/18656)* k5);
+    	var k7 = h*ydot(t + h, y + (35/384)*k1 + (500/1113)*k3 + (125/192)* k4 - (2187/6784)* k5 + (11/84)* k6);
+    	
+    	var yNext =  y + (35/384)*k1 + (500/1113)*k3 + (125/192)* k4 - (2187/6784)* k5 + (11/84)* k6;
+    	return yNext;
     };
     return s;
 
