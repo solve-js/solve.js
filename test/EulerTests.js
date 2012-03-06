@@ -11,71 +11,216 @@
 
 EulerTest = TestCase("EulerTest");
 
-EulerTest.prototype.testInitialStep = function(){
-// y'=y and y(0)=1 dt=1
-// y1 = 2, y2 = 4, y3 = 8
-    var s = Object.create(solver);
-    var expectedValues = [[2],[4],[8]];
-    var y0 = [1];
-    var h = 1;
+/**
+ * Try to add frequently used functions/objects in the parent TestCase object so they don't get created/destroyed
+ * over and over again with each test.
+ */
+EulerTest.prototype.setUp = function () {
+    this.solve = Object.create(solver);
+    this.simpleDE = {
+        func:function (t, y) {
+            var ydot = [];
+            ydot[0] = y[0];
+            return ydot;
+        },
+        y0:[1],
+        expectedValues:[
+            [2],
+            [4],
+            [8]
+        ],
+        stepSize:1
+    };
+    this.rigidBody3D = {
+        func:function (t, y) {
+            var ydot = [];
+            ydot[0] = y[1] * y[2];
+            ydot[1] = (-y[0]) * y[2];
+            ydot[2] = (-.51) * y[0] * y[1];
+
+            return ydot;
+        },
+        y0:[0, 1, 1],
+        startTime:0,
+        endTime:12
+    };
+    this.analyticMassSpringDamper = {
+        m: 10,
+        k: 8,
+        b: 6,
+        startTime: 0,
+        endTime: 25,
+        stepSize: 0.1,
+        y0: [5, 0],
+        func: function (t, y){
+            var b = 6
+            var k = 8;
+            var m = 10;
+            var wn = (Math.sqrt(k/m));
+            var zeta = (0.5*b/Math.sqrt(k*m));
+            var ydot = [];
+
+            ydot[0] = y[1];
+            ydot[1] = -wn * (wn * y[0] + 2 * zeta * y[1]);
+            return ydot;
+        },
+        analyticSol: function(tvals, y0){
+            var b = 6;
+            var k = 8;
+            var m = 10;
+            var wn = (Math.sqrt(k/m));
+            var zeta = (0.5*b/Math.sqrt(k*m));
+            var timespan = tvals;
+            var solution = [[],[]];
+            Verify.value(zeta, "zeta").always().isNumber().greaterThanOrEqualTo(0);
+
+            if(zeta < 1){ //Underdamped case
+                var s = -wn*zeta;
+                var wd = Math.sqrt(1-Math.pow(zeta,2))*wn;
+                var A = y0[0];
+                var B = (y0[1]-s*y0[0])/wd;
+
+                timespan.forEach(function(value, index, array){
+                    var t = value;
+                    var Y1 = Math.exp(s*t)*(A*Math.cos(wd*t)+B*Math.sin(wd*t));
+                    var Y2 = Math.exp(s*t)*((A*s+B*wd)*Math.cos(wd*t)+(B*s-A*wd)*Math.sin(wd*t));
+                    solution[0].push(Y1);
+                    solution[1].push(Y2);
+                });
+                return solution;
+            } else if(zeta === 1){ //Critical damping
+                var A = y0[0];
+                var B = wn*y0[0]+y0[1];
+
+                timespan.forEach(function(value, index, array){
+                    var t = value;
+                    var Y1 = (A+B*t)*Math.exp(-wn*t);
+                    var Y2 = (B-A*wn-B*wn*t)*Math.exp(-wn*t);
+                    solution[0].push(Y1);
+                    solution[1].push(Y2);
+                });
+                return solution;
+            } else { //Overdamped
+                var del = wn*Math.sqrt(Math.pow(zeta,2)-1);
+                var s1 = -wn*zeta+del;
+                var s2 = -wn*zeta-del;
+
+                var A = 0.5*(y0[1]-s2*y0[0])/del;
+                var B = 0.5*(s1*y0[0]-y0[1])/del;
+
+                timespan.forEach(function(value, index, array){
+                    var t = value;
+                    var Y1 = A*Math.exp(s1*t)+B*Math.exp(s2*t);
+                    var Y2 = A*s1*Math.exp(s1*t)+B*s2*Math.exp(s2*t);
+                    solution[0].push(Y1);
+                    solution[1].push(Y2);
+                });
+                return solution;
+            }
+        }
+    };
+};
+
+/**
+ * Test of a simple differential equation: y' = y, where y(0) = 1, and dt = 1
+ * Uses Euler's Method to evaluate the next 3 steps of the solution and checks this against the expected value.
+ * You can easily check these expected values by working through Euler's method by hand.
+ * y(1) = 2, y(2) = 4, y(3) = 8
+ */
+EulerTest.prototype.testInitialStep = function () {
+    var s = this.solve;
+    var expectedValues = this.simpleDE.expectedValues;
+    var y0 = this.simpleDE.y0;
+    var h = this.simpleDE.stepSize;
+    var de = this.simpleDE.func;
     var result;
 
-    var de = function(t,y){
-        var ydot = [];
-        ydot[0] = y[0];
-        return ydot;
-    };
 
-    for(var i = 0; i < expectedValues.length; i++){
+    for (var i = 0; i < expectedValues.length; i++) {
 
-        result = s.eulerStep(de,i,y0,h);
-        for(var j = 0; j < result.length; j++){
-            assertEquals("The first 3 values for using Euler's method to solve y' = y, y0 = 1, h = 1 should be [2,4,8]",expectedValues[i][j],result[j]);
-            console.log("test");
+        result = s.eulerStep(de, i, y0, h);
+        for (var j = 0; j < result.length; j++) {
+            assertEquals("The first 3 values for using Euler's method to solve y' = y, y0 = 1, h = 1 should be [2,4,8]", expectedValues[i][j], result[j]);
         }
         y0 = result;
     }
-
-    var validArray = [];
-    var invalidArray = [];
-    var n;
-    for(var i = 0; i < 100; i++){
-        n = Math.random() * 10;
-        validArray.push(n);
-        invalidArray.push(n);
-    }
-    invalidArray.push(Number.NaN);
-    for(var i = 0; i < 100; i++){
-        n = Math.random() * -10;
-        validArray.push(n);
-        invalidArray.push(n);
-    }
-    invalidArray.push(Number.NEGATIVE_INFINITY);
-    assertNoException(Verify.value(validArray).always().isArray().ofFiniteNumbers(), "Array should not cause any exceptions.");
-    //assertNoException(Verify.value(invalidArray).always().isArray().ofFiniteNumbers(), "Array contains -INF and NaN and should trigger an exception.");
-    console.log("test");
-    console.log("hello");
 };
 
-EulerTest.prototype.isArrayOfNumbers = function(){
-   /* //var verify = Object.create(Verify);
-    var validArray = [];
-    var invalidArray = [];
-    var n;
-    for(var i = 0; i < 100; i++){
-        n = Math.random() * 10;
-        validArray.push(n);
-        invalidArray.push(n);
-    }
-    invalidArray.push(Number.NaN);
-    for(var i = 0; i < 100; i++){
-        n = Math.random() * -10;
-        validArray.push(n);
-        invalidArray.push(n);
-    }
-    invalidArray.push(Number.NEGATIVE_INFINITY);
-    assertNoException(Verify.value(validArray).always().isArray().ofFiniteNumbers(), "Array should not cause any exceptions.");
-    //assertNoException(Verify.value(invalidArray).always().isArray().ofFiniteNumbers(), "Array contains -INF and NaN and should trigger an exception.");
-    console.log("test");*/
-    console.log("hello");
+EulerTest.prototype.testSolverFunction = function () {
+    var s = this.solve;
+    var func = this.simpleDE.func;
+    var initialCond = this.simpleDE.y0;
+    var startTime = 0;
+    var endTime = 100;
+    var stepSize = 1;
+
+    var results = s.solve(func, initialCond, startTime, endTime, stepSize);
+    results.y.forEach(function (value, index, array) {
+        assertEquals("Length of time vector and all solutions should be equal", results.t.length, value.length);
+    });
+};
+/**
+ * Test to make sure nothing strange happens with a system of differential equations.
+ * Using an example DE from the MATLAB documentation: http://www.mathworks.com/help/techdoc/ref/ode23.html
+ * y'1 = y2*y3, y'2 = -y1*y3, y'3 = -0.51*y1*y2
+ * y0 = [0, 1, 1]
+ * dt = 0.01
+ */
+EulerTest.prototype.testSystemOfDifferentialEquations = function () {
+    var s = this.solve;
+    var func = this.rigidBody3D.func;
+    var initialCond = this.rigidBody3D.y0;
+    var startTime = this.rigidBody3D.startTime;
+    var endTime = this.rigidBody3D.endTime;
+    var stepSize = 0.01;
+
+    var results = s.solve(func, initialCond, startTime, endTime, stepSize);
+    assertEquals("Solution should contain 3 dimensions", initialCond.length, results.y.length);
+    assertEquals("Length of time vector and all solutions should be equal", results.t.length, results.y[2].length);
+
+    //TODO: Check to see if these results are correct. The solver may not choke, but may return bad results
+};
+
+/**
+ * Test to check the behavior of the Euler stepper function. We do not allow steps to be NaN or Infinity,
+ * and an exception should be thrown if these values occur.
+ */
+EulerTest.prototype.testInvalidStepResults = function () {
+    var invalidResultsFunction = function (t, y) {
+        var ydot = [1, 3, 5, 7, Number.NaN];
+        return ydot;
+    };
+
+    var s = this.solve;
+    var validDE = this.simpleDE.func;
+
+    assertException("Functions representing differential equations may not return NaN or +/- Infinity", function () {
+        return s.eulerStep(invalidResultsFunction, 1, [3], .5);
+    }, new TypeError());
+    assertNoException("Differential Equations may return any number other than NaN or +/- Infinity", function () {
+        return s.eulerStep(validDE, 0, [1], 1);
+    });
+};
+
+EulerTest.prototype.testAnalyticSolution = function(){
+    var s = this.solve;
+    var testDE = this.analyticMassSpringDamper.func;
+    var solution = this.analyticMassSpringDamper.analyticSol;
+    var initCond = this.analyticMassSpringDamper.y0;
+    var start = 0;
+    var end = 25;
+    var stepSize = 0.1;
+
+    var numSoln = s.solve(testDE, initCond, start, end, stepSize);
+
+    var analSoln = solution(numSoln.t, initCond);
+
+
+    /**
+     * Just an interim method of checking the results. Investigating other methods of comparing the error between the
+     * numerical method and the analytical solution to determine correctness.
+     */
+    numSoln.y.forEach(function(value, index, array){
+        assertEqualsDelta("Difference between numeric and analytic solution should be < .5", value, analSoln[index],.5);
+    });
 };
