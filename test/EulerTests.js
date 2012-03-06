@@ -211,7 +211,7 @@ EulerTest.prototype.testAnalyticSolution = function(){
     var end = 25;
     var stepSize = 0.1;
 
-    var numSoln = s.solve(testDE, initCond, start, end, stepSize);
+    var numSoln = s.solve(testDE, initCond, start, end, stepSize, s.dormandPrinceStep);
 
     var analSoln = solution(numSoln.t, initCond);
 
@@ -220,7 +220,25 @@ EulerTest.prototype.testAnalyticSolution = function(){
      * Just an interim method of checking the results. Investigating other methods of comparing the error between the
      * numerical method and the analytical solution to determine correctness.
      */
-    numSoln.y.forEach(function(value, index, array){
-        assertEqualsDelta("Difference between numeric and analytic solution should be < .5", value, analSoln[index],.5);
+
+    //TODO: Calculate RMS error instead.
+    var totalError = [0,0];
+    numSoln.y[0].forEach(function(value, index, array){
+        var errorSq1 = Math.pow(value - analSoln[0][index], 2);
+        var errorSq2 = Math.pow(numSoln.y[1][index] - analSoln[1][index], 2);
+        totalError[0] += errorSq1;
+        totalError[1] += errorSq2;
     });
+
+    var rmsError = [];
+    rmsError[0] = Math.sqrt(totalError[0]/numSoln.y[0].length);
+    rmsError[1] = Math.sqrt(totalError[1]/numSoln.y[1].length);
+    console.log("RMS Error for state 1: %d", rmsError[0]);
+    console.log("RMS Error for state 2: %d", rmsError[1]);
+    /*console.log(numSoln.y[0]);
+    console.log(analSoln[0]);
+    console.log(numSoln.y[1]);
+    console.log(analSoln[1]);*/
+
+
 };

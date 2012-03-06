@@ -27,6 +27,7 @@ var solver = (function () {
      */
     s.solve = function (deFunction, y0, t0, tf, stepSize, integrator) {
         "use strict"
+
         try {
             Verify.value(deFunction, "deFunction").always().isFunction();
             Verify.value(y0, "y0").always().isArray().ofFiniteNumbers();
@@ -40,6 +41,7 @@ var solver = (function () {
             var ndims = y0.length;
             var soln = [];
             var timevals = [];
+            var relTolerance = 0.1;
 
             for (var dim = 0; dim < ndims; dim++) {
                 soln.push([y0[dim]]);
@@ -49,18 +51,40 @@ var solver = (function () {
             var currentValue = y0;
             var dt = stepSize;
 
-            for (var t = t0; t < tf; t += dt) {
-                var step = stepper(deFunction, t, currentValue, dt);
-                currentValue = step;
+            if (stepper === s.eulerStep) {
 
-                for (var dim = 0; dim < ndims; dim++) {
-                    soln[dim].push([currentValue[dim]]);
+
+                for (var t = t0; t < tf; t += dt) {
+                    var step = stepper(deFunction, t, currentValue, dt);
+                    currentValue = step;
+
+                    for (var dim = 0; dim < ndims; dim++) {
+                        soln[dim].push([currentValue[dim]]);
+                    }
+                    timevals.push(t + dt);
                 }
-                timevals.push(t + dt);
+                results.y = soln;
+                results.t = timevals;
+                return results;
+            } else {
+                var t = t0;
+                while (t <= tf) {
+                    var step = stepper(deFunction, t, currentValue, dt);
+                    currentValue = step.y;
+
+                    for (var dim = 0; dim < ndims; dim++) {
+                        soln[dim].push([currentValue[dim]]);
+                    }
+
+                    dt = s.getNextTimeStep(dt, step.error, relTolerance);
+                    //console.log("calculated dtNext: %d", dt);
+                    t += dt;
+                    timevals.push(t);
+                }
+                results.y = soln;
+                results.t = timevals;
+                return results;
             }
-            results.y = soln;
-            results.t = timevals;
-            return results;
         } catch (e) {
             console.log(e);
             throw e;
@@ -264,22 +288,25 @@ var solver = (function () {
     s.getNextTimeStep = function (dtCurrent, calcError, tolerance) {
         "use strict"
         try {
-            var dtOpt = [];
             Verify.value(dtCurrent, "dtCurrent").always().isNumber().isFinite();
             Verify.value(calcError, "calcError").always().isArray().ofFiniteNumbers();
             Verify.value(tolerance, "tolerance").always().isNumber().isFinite();
 
-            calcError.forEach(function (value, i, a) {
-                var s = Math.pow((tolerance * dtCurrent) / (2 * value), (1 / 5));
-                dtOpt[i] = s * dtCurrent;
-            });
-
-            var dtNext = Math.min.apply(Math, dtOpt);
+            //Calculate next step based on the largest error
+            var maxError = Math.max.apply(Math, calcError);
+            var s = Math.pow((tolerance * dtCurrent) / (2 * maxError), (1 / 5));
+            //TODO: Check error against tolerance. If the error exceeds allowed tolerance, this is a failed step. We may either redo the step with a smaller stepsize, or we may throw an error.
+            //'s' is limited to values >0.1 and <5
+            s = Math.min(s, 5);
+            s = Math.max(s, 0.1);
+            var dtNext = s * dtCurrent;
             return dtNext;
         } catch (e) {
             throw e;
         }
     };
+
+    //TODO: Interpolation: 4 points per step, user can also specify time vector. Identify start and end points, solve DE, then backtrank and interpolate to find solution at given points
 
 
     return s;
