@@ -36,11 +36,12 @@ var solver = (function () {
             Verify.value(stepSize, "stepSize").always().isNumber().lessThan(Math.abs(tf - t0));
             Verify.value(integrator, "integrator").whenDefined().isFunction();
 
-            var results = {y:[], t:[]};
+            var results = {y:[], t:[], dense:[]};
             var stepper = integrator || s.eulerStep;
             var ndims = y0.length;
             var soln = [];
             var timevals = [];
+            var midpoints = [];
             var relTolerance = 0.1;
 
             for (var dim = 0; dim < ndims; dim++) {
@@ -49,6 +50,7 @@ var solver = (function () {
             timevals.push(t0);
 
             var currentValue = y0;
+            var interpolatedValue = 0;
             var dt = stepSize;
 
             if (stepper === s.eulerStep) {
@@ -71,9 +73,11 @@ var solver = (function () {
                 while (t <= tf) {
                     var step = stepper(deFunction, t, currentValue, dt);
                     currentValue = step.y;
+                    interpolatedValue = step.dense;
 
                     for (var dim = 0; dim < ndims; dim++) {
                         soln[dim].push([currentValue[dim]]);
+                        midpoints[dim].push([interpolatedValue[dim]]);
                     }
 
                     dt = s.getNextTimeStep(dt, step.error, relTolerance);
@@ -83,6 +87,7 @@ var solver = (function () {
                 }
                 results.y = soln;
                 results.t = timevals;
+                results.dense = midpoints;
                 return results;
             }
         } catch (e) {
@@ -268,13 +273,30 @@ var solver = (function () {
                 error[i] = Math.abs(nextStep[i] - (y[i] + (5179 / 57600) * k1[i] + (7571 / 16695) * k3[i] + (393 / 640) * k4[i] - (92097 / 339200) * k5[i] + (187 / 2100) * k6[i] + (1 / 40) * k7[i]));
             });
 
+            var midp = [];
+            y.forEach(function(value, i, a){
+                midp.push(value + (dt/2) *((6025192743/30085553152)*k1[i] + (51252292925/65400821598) * k3[i] - (2691868925/45128329728) * k4[i] + (187940372067/1594534317056) * k5[i] - (1776094331/19743644256) * k6[i] + (11237099/235043384) * k7[i]));
+            });
+
+
+            //y_n+1/2 = y_n + 1/2 h Sum(j=0,6){c_*j * f_j}
+            //u(theta) = y0 + h Sum(i=1,s*){b_i(theta)*k_i}
+
+            //Compute an interpolated Midpoint, then interpolate using
+
             return {
                 y:y7,
+                dense: midp,
                 error:error
             };
         } catch (e) {
             throw e;
         }
+    };
+
+    s.dormandPrinceInterpolate = function(tInterp, t, y, dt, ydot){
+
+
     };
 
     /**
