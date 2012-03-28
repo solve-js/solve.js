@@ -13,6 +13,53 @@
 var solver = (function () {
     var s = {};
 
+    var EquationParameters = function(deFunc, t0, tf, initialCond, absTolerance, relTolerance){
+        var params = Object.create(EquationParameters.prototype);
+        params.ydot = deFunc;
+        params.t0 = t0;
+        params.tf = tf;
+        params.y0 = initialCond;
+        params.dt0 = 0;
+        params.dims = y0.length;
+        params.atol = absTolerance;
+        params.rtol = relTolerance;
+        params.state = initialCond;
+        params.currentTime = t0;
+        params.firstStep = true;
+        params.reverse = (t0 < tf);
+        params.eventHandlers = [];
+        return params;
+    };
+
+    var IntegratorParameters = function(A_coefficients, B_coefficients, C_coefficients, interpolationFunc){
+        var params = Object.create(IntegratorParameters.prototype);
+        params.A = A_coefficients;
+        params.B = B_coefficients;
+        params.C = C_coefficients;
+        params.stages = C_coefficients.length + 1;
+        params.interpolate = interpolationFunc;
+        return params;
+    };
+
+    //Provides the coefficients for Dormand-Prince integration
+    s.DormandPrinceIntegrator = (function(){
+        //Coefficients for  RK45/Dormand-Prince integration
+        var A = [[1.0/5.0],
+            [3.0/40.0, 9.0/40.0],
+            [44.0/45.0, -56.0/15.0, 32.0/9.0],
+            [19372.0/6561.0, -25360.0/2187.0, 64448.0/6561.0,  -212.0/729.0],
+            [9017.0/3168.0, -355.0/33.0, 46732.0/5247.0, 49.0/176.0, -5103.0/18656.0],
+            [35.0/384.0, 0.0, 500.0/1113.0, 125.0/192.0, -2187.0/6784.0, 11.0/84.0]];
+
+        var B = [35.0/384.0, 0.0, 500.0/1113.0, 125.0/192.0, -2187.0/6784.0, 11.0/84.0, 0.0];
+
+        var C = [1.0/5.0, 3.0/10.0, 4.0/5.0, 8.0/9.0, 1.0, 1.0];
+
+        var DPparams = IntegratorParameters(A,B,C);
+        DPparams.order = 5;
+        return DPparams;
+    })();
+
     /**
      * @function
      * @param {Function} deFunction The function representing the Differential Equation to be solved
@@ -35,6 +82,8 @@ var solver = (function () {
             Verify.value(tf, "tf").always().isNumber().isFinite().notEqualTo(t0);
             Verify.value(stepSize, "stepSize").always().isNumber().lessThan(Math.abs(tf - t0));
             Verify.value(integrator, "integrator").whenDefined().isFunction();
+
+            var DEParams = EquationParameters(deFunction, t0, tf, y0);
 
             var results = {y:[], t:[], dense:[]};
             var stepper = integrator || s.eulerStep;
@@ -95,6 +144,27 @@ var solver = (function () {
             throw e;
         }
     };
+
+    s.modularSolver = function(deFunction, initialConditions, startTime, endTime, absoluteTolerance, relativeTolerance, integrationMethod){
+        "use strict"
+        try{
+            Verify.value(deFunction, "deFunction").always().isFunction();
+            Verify.value(initialConditions, "initialConditions").always().isArray().ofFiniteNumbers();
+            Verify.value(startTime, "startTime").always().isNumber().isFinite();
+            Verify.value(endTime, "endTime").always().isNumber().isFinite().notEqualTo(startTime);
+            Verify.value(absoluteTolerance, "absoluteTolerance").always().isNumber();
+            Verify.value(relativeTolerance, "relativeTolerance").always().isNumber();
+            Verify.value(integrationMethod, "integrationMethod").whenDefined().isFunction();
+
+            var DEParams = EquationParameters(deFunction, startTime, endTime, initialConditions);
+            var integrator = integrationMethod || s.DormandPrinceIntegrator;
+
+
+
+
+        }
+    }
+
 
 
     /**
@@ -168,7 +238,7 @@ var solver = (function () {
             var yn = ydot(t, y);
 
             //Step cannot result in a NaN or Infinity
-            Verify.value(yn, "Yn").always().isArray().ofFiniteNumbers();
+            //Verify.value(yn, "Yn").always().isArray().ofFiniteNumbers();
 
             for (var i = 0; i < yn.length; i++) {
                 nextStep[i] = y[i] + (yn[i] * dt);
@@ -178,27 +248,6 @@ var solver = (function () {
             throw e;
         }
     }; 
-    /**
-     * @function
-     * @param {Function} ydot The function representing the Differential Equation that is being solved
-     * @param {Number} t The time value at which the DE is being evaluated for this step
-     * @param {Number} y Last value of y
-     * @param {Number} h The size of the step to be used in calculating this next step of the integration.
-     * 
-     * @returns {Number} yNext The next step of y
-     */
-    s.dPrinceMethodOneStep = function(ydot,t,y,h){
-    	var k1 = h*ydot(t,y);
-    	var k2 = h*ydot(t + 0.2*h, y + 0.2*k1);
-    	var k3 = h*ydot(t + 0.3*h, y + (3/40)*k1 + (9/40)*k2);
-    	var k4 = h*ydot(t + 0.8*h, y + (44/45)*k1 - (56/15)*k2 + (32/9)* k3);
-    	var k5 = h*ydot(t + (8/9)*h, y + (19372/6561)*k1 - (25360/2187)*k2 + (64448/6561)* k3 - (212/729)*k4);
-    	var k6 = h*ydot(t + h, y + (9017/3168)*k1 - (355/33)*k2 - (46732/5247)* k3 + (49/176)*k4 - (5103/18656)* k5);
-    	var k7 = h*ydot(t + h, y + (35/384)*k1 + (500/1113)*k3 + (125/192)* k4 - (2187/6784)* k5 + (11/84)* k6);
-    	
-    	var yNext =  y + (35/384)*k1 + (500/1113)*k3 + (125/192)* k4 - (2187/6784)* k5 + (11/84)* k6;
-    	return yNext;
-    };
 
     /**
      * Calculates the next step in the solution of the Differential Equation using the Dormand-Prince method
@@ -211,6 +260,7 @@ var solver = (function () {
      */
     s.dormandPrinceStep = function (ydot, t, y, dt) {
         "use strict"
+
         try {
             var nextStep;
 
@@ -294,9 +344,129 @@ var solver = (function () {
         }
     };
 
-    s.dormandPrinceInterpolate = function(tInterp, t, y, dt, ydot){
+    RKIntegrator = function(DEParams, IntegratorParams){
+        Verify.value(DEParams, "DEParams").always().isPrototypeOf(EquationParameters);
+        Verify.value(IntegratorParams, "IntegratorParams").always().isPrototypeOf(IntegratorParameters);
+
+        //Coefficients for integration
+        var A = IntegratorParams.A;
+
+        var B = IntegratorParams.B;
+
+        var C = IntegratorParams.C;
+
+        var dim = DEParams.dims;
+        var stages = DEParams.stages;
+        var t = DEParams.currentTime;
+        var ydot = DEParams.ydot;
+        var Ki = [[]];
+        var yTmp = [];
+        var dt = DEParams.dt;
+
+        if(firstStep || !firstSameAsLast){
+            Ki[0] = ydot(t,y);
+        }
+
+        if(firstStep){
+            if(DEParams.dt0 === 0){
+            dt = calculateFirstTimeStep(DEParams, Ki);
+            } else {
+                dt = DEParams.dt0;
+            }
+            DEParams.firstStep = false;
+        }
+
+        //If this is the first step, we need to calculate the starting step size
 
 
+        for(var k = 1; k < stages; ++k){
+            for(var j = 0; j < y.length; ++j){
+                var sum = A[k-1][0] * Ki[0][j];
+                for(var m = 1; m < k; ++m){
+                    sum += A[k-1][m] * Ki[m][j];
+                }
+                yTmp[j] = y[j] + dt * sum;
+            }
+            Ki[k] = ydot(t + C[k-1] * dt, yTmp);
+        }
+    };
+
+    var calculateFirstTimeStep = function(DEParams, Ki){
+        var atol = DEParams.atol;
+        var rtol = DEParams.rtol;
+        var y = DEParams.state;
+        var y0 = DEParams.y0;
+        var t0 = DEParams.t0;
+        var ndims = DEParams.dims;
+        var step;
+        var scalingFactor = [];
+
+
+        if(Array.isArray(atol)){
+            for(var i = 0; i < ndims; ++i){
+                scalingFactor[i] = atol[i] + rtol[i] * Math.abs(y[i]);
+            }
+        } else{
+            for(var i = 0; i < ndims; ++i){
+                scalingFactor[i] = atol + rtol * Math.abs(y[i]);
+            }
+        }
+
+        //Strategy for calculating the initial step is from Apache Commons Math library
+
+        //rough first guess, h = 0.01 * ||y/scalingFactor|| / ||ydot/scalingFactor||
+        var ratio;
+        var yScale = 0;
+        var ydotScale = 0;
+
+        for(var i = 0; i < scalingFactor.length; ++i){
+            ratio = y0[i] / scalingFactor[i];
+            yScale += ratio * ratio;
+            ratio = Ki[i] / scalingFactor[i];
+            ydotScale += ratio * ratio;
+        }
+
+        if((yScale < 1.0e-10) || (ydotScale < 1.0e-10)){
+            step = 1.0e-6;
+        } else{
+            step = 0.01 * Math.sqrt(yScale/ydotScale);
+        }
+
+        // Make a more refined approximation with Euler's method
+        var yEuler = [];
+        for(var i = 0; i < ndims; ++i){
+            yEuler[i] = y0[i] + step * Ki[i];
+        }
+        var ydot = DEParams.ydot(t0 + step, yEuler);
+
+        //estimate the 2nd derivative
+        var y2dotscale = 0;
+        for(var i = 0; i < ndims; ++i){
+            ratio = (ydot[i] - Ki[i]) / scalingFactor[i];
+            y2dotscale += ratio * ratio;
+        }
+        y2dotscale = Math.sqrt(y2dotscale) / step;
+
+        //Actual step size is calculated with the formula:
+        // step^order * Max(||ydot/tol||, ||y2dot/tol||) == 0.01
+        //Solve this for 'step' to find the optimal step size
+
+        var maxInv2 = Math.max(Math.sqrt(ydotScale), y2dotscale);
+        var tempStep = (maxInv2 < 1.0e-15) ? Math.max(1.0e-6, 0.001 * Math.abs(step)) : Math.pow(0.01/maxInv2, 1.0/DEParams.order);
+
+        step = Math.min(100 * Math.abs(step), tempStep);
+        step = Math.max(step, 1.0e-12 * Math.abs(t0));
+
+        if(step < DEParams.minStepSize){
+            step = DEParams.minStepSize;
+        }
+        if(step > DEParams.maxStepSize){
+            step = DEParams.maxStepSize;
+        }
+        if(DEParams.reverse){
+            step = -step;
+        }
+        return step;
     };
 
     /**
