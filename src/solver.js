@@ -374,6 +374,7 @@ var solver = (function () {
                 dt = DEParams.dt0;
             }
             DEParams.firstStep = false;
+            firstStep = false;
         }
 
         //If this is the first step, we need to calculate the starting step size
