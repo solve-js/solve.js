@@ -9,13 +9,13 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-EulerTest = TestCase("EulerTest");
+GeneralTest = TestCase("GeneralTest");
 
 /**
  * Try to add frequently used functions/objects in the parent TestCase object so they don't get created/destroyed
  * over and over again with each test.
  */
-EulerTest.prototype.setUp = function () {
+GeneralTest.prototype.setUp = function () {
     this.solve = Object.create(solver);
     this.simpleDE = {
         func:function (t, y) {
@@ -127,7 +127,7 @@ EulerTest.prototype.setUp = function () {
  * You can easily check these expected values by working through Euler's method by hand.
  * y(1) = 2, y(2) = 4, y(3) = 8
  */
-EulerTest.prototype.testInitialStep = function () {
+GeneralTest.prototype.testInitialStep = function () {
     var s = this.solve;
     var expectedValues = this.simpleDE.expectedValues;
     var y0 = this.simpleDE.y0;
@@ -146,7 +146,7 @@ EulerTest.prototype.testInitialStep = function () {
     }
 };
 
-EulerTest.prototype.testSolverFunction = function () {
+GeneralTest.prototype.testSolverFunction = function () {
     var s = this.solve;
     var func = this.simpleDE.func;
     var initialCond = this.simpleDE.y0;
@@ -166,7 +166,7 @@ EulerTest.prototype.testSolverFunction = function () {
  * y0 = [0, 1, 1]
  * dt = 0.01
  */
-EulerTest.prototype.testSystemOfDifferentialEquations = function () {
+GeneralTest.prototype.testSystemOfDifferentialEquations = function () {
     var s = this.solve;
     var func = this.rigidBody3D.func;
     var initialCond = this.rigidBody3D.y0;
@@ -185,7 +185,7 @@ EulerTest.prototype.testSystemOfDifferentialEquations = function () {
  * Test to check the behavior of the Euler stepper function. We do not allow steps to be NaN or Infinity,
  * and an exception should be thrown if these values occur.
  */
-EulerTest.prototype.testInvalidStepResults = function () {
+GeneralTest.prototype.testInvalidStepResults = function () {
     var invalidResultsFunction = function (t, y) {
         var ydot = [1, 3, 5, 7, Number.NaN];
         return ydot;
@@ -202,7 +202,7 @@ EulerTest.prototype.testInvalidStepResults = function () {
     });
 };
 
-EulerTest.prototype.testAnalyticSolution = function(){
+GeneralTest.prototype.testAnalyticSolution = function(){
     var s = this.solve;
     var testDE = this.analyticMassSpringDamper.func;
     var solution = this.analyticMassSpringDamper.analyticSol;

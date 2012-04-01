@@ -31,13 +31,15 @@ var solver = (function () {
         return params;
     };
 
-    var IntegratorParameters = function(A_coefficients, B_coefficients, C_coefficients, interpolationFunc){
+    var IntegratorParameters = function(A_coefficients, B_coefficients, C_coefficients, interpolationFunc, firstSameAsLast){
         var params = Object.create(IntegratorParameters.prototype);
+        IntegratorParameters.prototype.
         params.A = A_coefficients;
         params.B = B_coefficients;
         params.C = C_coefficients;
         params.stages = C_coefficients.length + 1;
         params.interpolate = interpolationFunc;
+        params.firstSameAsLast = firstSameAsLast || false;
         return params;
     };
 
@@ -57,6 +59,7 @@ var solver = (function () {
 
         var DPparams = IntegratorParameters(A,B,C);
         DPparams.order = 5;
+        DPparams.firstSameAsLast = true;
         return DPparams;
     })();
 
@@ -345,6 +348,7 @@ var solver = (function () {
     };
 
     RKIntegrator = function(DEParams, IntegratorParams){
+        "use strict"
         Verify.value(DEParams, "DEParams").always().isPrototypeOf(EquationParameters);
         Verify.value(IntegratorParams, "IntegratorParams").always().isPrototypeOf(IntegratorParameters);
 
@@ -359,9 +363,11 @@ var solver = (function () {
         var stages = DEParams.stages;
         var t = DEParams.currentTime;
         var ydot = DEParams.ydot;
+        var y = DEParams.state;
         var Ki = [[]];
         var yTmp = [];
         var dt = DEParams.dt;
+        var firstSameAsLast = DEParams.firstSameAsLast;
 
         if(firstStep || !firstSameAsLast){
             Ki[0] = ydot(t,y);
