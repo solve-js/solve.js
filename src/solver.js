@@ -13,16 +13,27 @@
 var solver = (function () {
     var s = {};
 
-    var EquationParameters = function(deFunc, t0, tf, initialCond, absTolerance, relTolerance){
+    var EquationParameters = function (deFunc, t0, tf, initialCond, absTolerance, relTolerance) {
         var params = Object.create(EquationParameters.prototype);
         params.ydot = deFunc;
         params.t0 = t0;
         params.tf = tf;
         params.y0 = initialCond;
+
         params.dt0 = 0;
         params.dims = y0.length;
         params.atol = absTolerance;
         params.rtol = relTolerance;
+
+        /*
+         * Safety Factor, Max Growth Rate, and Min Shrink Rate all taken from Apache Commons Math
+         */
+        params.safetyFactor = 0.9;
+        params.minReduction = 0.2;
+        params.maxGrowth = 10.0;
+
+        params.minStep = 0;
+        params.maxStep = Math.abs(params.tf - params.t0);
         params.state = initialCond;
         params.currentTime = t0;
         params.firstStep = true;
@@ -31,10 +42,10 @@ var solver = (function () {
         return params;
     };
 
-    var IntegratorParameters = function(A_coefficients, B_coefficients, C_coefficients, interpolationFunc, firstSameAsLast){
+    var IntegratorParameters = function (A_coefficients, B_coefficients, C_coefficients, interpolationFunc, firstSameAsLast) {
         var params = Object.create(IntegratorParameters.prototype);
         IntegratorParameters.prototype.
-        params.A = A_coefficients;
+            params.A = A_coefficients;
         params.B = B_coefficients;
         params.C = C_coefficients;
         params.stages = C_coefficients.length + 1;
@@ -44,20 +55,22 @@ var solver = (function () {
     };
 
     //Provides the coefficients for Dormand-Prince integration
-    s.DormandPrinceIntegrator = (function(){
+    s.DormandPrinceIntegrator = (function () {
         //Coefficients for  RK45/Dormand-Prince integration
-        var A = [[1.0/5.0],
-            [3.0/40.0, 9.0/40.0],
-            [44.0/45.0, -56.0/15.0, 32.0/9.0],
-            [19372.0/6561.0, -25360.0/2187.0, 64448.0/6561.0,  -212.0/729.0],
-            [9017.0/3168.0, -355.0/33.0, 46732.0/5247.0, 49.0/176.0, -5103.0/18656.0],
-            [35.0/384.0, 0.0, 500.0/1113.0, 125.0/192.0, -2187.0/6784.0, 11.0/84.0]];
+        var A = [
+            [1.0 / 5.0],
+            [3.0 / 40.0, 9.0 / 40.0],
+            [44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0],
+            [19372.0 / 6561.0, -25360.0 / 2187.0, 64448.0 / 6561.0, -212.0 / 729.0],
+            [9017.0 / 3168.0, -355.0 / 33.0, 46732.0 / 5247.0, 49.0 / 176.0, -5103.0 / 18656.0],
+            [35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0, -2187.0 / 6784.0, 11.0 / 84.0]
+        ];
 
-        var B = [35.0/384.0, 0.0, 500.0/1113.0, 125.0/192.0, -2187.0/6784.0, 11.0/84.0, 0.0];
+        var B = [35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0, -2187.0 / 6784.0, 11.0 / 84.0, 0.0];
 
-        var C = [1.0/5.0, 3.0/10.0, 4.0/5.0, 8.0/9.0, 1.0, 1.0];
+        var C = [1.0 / 5.0, 3.0 / 10.0, 4.0 / 5.0, 8.0 / 9.0, 1.0, 1.0];
 
-        var DPparams = IntegratorParameters(A,B,C);
+        var DPparams = IntegratorParameters(A, B, C);
         DPparams.order = 5;
         DPparams.firstSameAsLast = true;
         return DPparams;
@@ -148,9 +161,9 @@ var solver = (function () {
         }
     };
 
-    s.modularSolver = function(deFunction, initialConditions, startTime, endTime, absoluteTolerance, relativeTolerance, integrationMethod){
+    s.modularSolver = function (deFunction, initialConditions, startTime, endTime, absoluteTolerance, relativeTolerance, integrationMethod) {
         "use strict"
-        try{
+        try {
             Verify.value(deFunction, "deFunction").always().isFunction();
             Verify.value(initialConditions, "initialConditions").always().isArray().ofFiniteNumbers();
             Verify.value(startTime, "startTime").always().isNumber().isFinite();
@@ -163,11 +176,8 @@ var solver = (function () {
             var integrator = integrationMethod || s.DormandPrinceIntegrator;
 
 
-
-
         }
     }
-
 
 
     /**
@@ -250,7 +260,7 @@ var solver = (function () {
         } catch (e) {
             throw e;
         }
-    }; 
+    };
 
     /**
      * Calculates the next step in the solution of the Differential Equation using the Dormand-Prince method
@@ -327,8 +337,8 @@ var solver = (function () {
             });
 
             var midp = [];
-            y.forEach(function(value, i, a){
-                midp.push(value + (dt/2) *((6025192743/30085553152)*k1[i] + (51252292925/65400821598) * k3[i] - (2691868925/45128329728) * k4[i] + (187940372067/1594534317056) * k5[i] - (1776094331/19743644256) * k6[i] + (11237099/235043384) * k7[i]));
+            y.forEach(function (value, i, a) {
+                midp.push(value + (dt / 2) * ((6025192743 / 30085553152) * k1[i] + (51252292925 / 65400821598) * k3[i] - (2691868925 / 45128329728) * k4[i] + (187940372067 / 1594534317056) * k5[i] - (1776094331 / 19743644256) * k6[i] + (11237099 / 235043384) * k7[i]));
             });
 
 
@@ -339,7 +349,7 @@ var solver = (function () {
 
             return {
                 y:y7,
-                dense: midp,
+                dense:midp,
                 error:error
             };
         } catch (e) {
@@ -347,7 +357,7 @@ var solver = (function () {
         }
     };
 
-    RKIntegrator = function(DEParams, IntegratorParams){
+    RKIntegrator = function (DEParams, IntegratorParams) {
         "use strict"
         Verify.value(DEParams, "DEParams").always().isPrototypeOf(EquationParameters);
         Verify.value(IntegratorParams, "IntegratorParams").always().isPrototypeOf(IntegratorParameters);
@@ -364,41 +374,108 @@ var solver = (function () {
         var t = DEParams.currentTime;
         var ydot = DEParams.ydot;
         var y = DEParams.state;
-        var Ki = [[]];
+        var Ki = [
+            []
+        ];
         var yTmp = [];
         var dt = DEParams.dt;
         var firstSameAsLast = DEParams.firstSameAsLast;
+        var firstStep = DEParams.firstStep;
 
-        if(firstStep || !firstSameAsLast){
-            Ki[0] = ydot(t,y);
-        }
+        var exp = -1.0 / IntegratorParams.order;
+        var error = 10;
+        while (error >= 1.0) {
 
-        if(firstStep){
-            if(DEParams.dt0 === 0){
-            dt = calculateFirstTimeStep(DEParams, Ki);
-            } else {
-                dt = DEParams.dt0;
+            if (firstStep || !firstSameAsLast) {
+                Ki[0] = ydot(t, y);
             }
-            DEParams.firstStep = false;
-            firstStep = false;
-        }
 
-        //If this is the first step, we need to calculate the starting step size
-
-
-        for(var k = 1; k < stages; ++k){
-            for(var j = 0; j < y.length; ++j){
-                var sum = A[k-1][0] * Ki[0][j];
-                for(var m = 1; m < k; ++m){
-                    sum += A[k-1][m] * Ki[m][j];
+            if (firstStep) {
+                //If this is the first step, we need to calculate the starting step size
+                if (DEParams.dt0 === 0) {
+                    dt = calculateFirstTimeStep(DEParams, Ki);
+                } else {
+                    dt = DEParams.dt0;
                 }
-                yTmp[j] = y[j] + dt * sum;
+                firstStep = false;
             }
-            Ki[k] = ydot(t + C[k-1] * dt, yTmp);
+
+
+            for (var k = 1; k < stages; ++k) {
+                for (var j = 0; j < dim; ++j) {
+                    var sum = A[k - 1][0] * Ki[0][j];
+                    for (var m = 1; m < k; ++m) {
+                        sum += A[k - 1][m] * Ki[m][j];
+                    }
+                    yTmp[j] = y[j] + dt * sum;
+                }
+                Ki[k] = ydot(t + C[k - 1] * dt, yTmp);
+            }
+
+            // Final stage for error calculations
+            for (var i = 0; i < dim; ++i) {
+                var su = B[0] * Ki[0][i];
+                for (var j = 0; j < stages; ++j) {
+                    sum += B[j] * Ki[j][i];
+                }
+                yTmp[i] = y[i] + dt * sum;
+            }
+
+            //Estimate the error for step rejection and step size adjustment
+            var error = estimateError(DEParams, Ki, y, yTmp, dt);
+
+
+            //If the normalized error is >1, reject the step, recalculate the step size and redo the step
+            if (error >= 1.0) {
+                var scaleFactor = Math.min(DEParams.maxGrowth, Math.max(DEParams.minReduction, DEParams.safetyFactor * Math.pow(error, exp)));
+                var newDt;
+                if (Math.abs(dt * scaleFactor) < DEParams.minStep) {
+                    newDt = DEParams.reverse ? -DEParams.minStep : DEParams.minStep;
+                }
+
+                if (Math.abs(dt * scaleFactor) > DEParams.maxStep) {
+                    newDt = DEParams.reverse ? -DEParams.maxStep : DEParams.maxStep;
+                }
+            }
         }
+
+        //After a good step has been calculated, use interpolation to find points for dense output
+
+
     };
 
-    var calculateFirstTimeStep = function(DEParams, Ki){
+    var estimateError = function (DEParams, Ki, y, yTmp, dt) {
+        var error = 0;
+        var E1 = 71.0 / 57600.0;
+        //E2 == 0
+        var E3 = -71.0 / 16695.0;
+        var E4 = 71.0 / 1920.0;
+        var E5 = -17253.0 / 339200.0;
+        var E6 = 22.0 / 525.0;
+        var E7 = -1.0 / 40.0;
+        var atol = DEParams.atol;
+        var rtol = DEParams.rtol;
+        var dim = DEParams.dims;
+
+        for (var i = 0; i < dim; ++i) {
+            var sum = E1 * Ki[0][i] + E3 * Ki[2][i] + E4 * Ki[3][i] + E5 * Ki[4][i] + E6 * Ki[5][i] + E7 * Ki[6][i];
+
+            var scale = Math.max(Math.abs(y[i]), Math.abs(yTmp[i]));
+            var tol;
+            if (Array.isArray(atol)) {
+                tol = atol[i] + rtol[i] * scale;
+            } else {
+                tol = atol + rtol * scale;
+            }
+
+            var ratio = dt * sum / tol;
+            error += ratio * ratio;
+        }
+        return Math.sqrt(error / dim);
+    };
+
+
+    var calculateFirstTimeStep = function (DEParams, Ki) {
         var atol = DEParams.atol;
         var rtol = DEParams.rtol;
         var y = DEParams.state;
@@ -409,12 +486,12 @@ var solver = (function () {
         var scalingFactor = [];
 
 
-        if(Array.isArray(atol)){
-            for(var i = 0; i < ndims; ++i){
+        if (Array.isArray(atol)) {
+            for (var i = 0; i < ndims; ++i) {
                 scalingFactor[i] = atol[i] + rtol[i] * Math.abs(y[i]);
             }
-        } else{
-            for(var i = 0; i < ndims; ++i){
+        } else {
+            for (var i = 0; i < ndims; ++i) {
                 scalingFactor[i] = atol + rtol * Math.abs(y[i]);
             }
         }
@@ -426,29 +503,29 @@ var solver = (function () {
         var yScale = 0;
         var ydotScale = 0;
 
-        for(var i = 0; i < scalingFactor.length; ++i){
+        for (var i = 0; i < scalingFactor.length; ++i) {
             ratio = y0[i] / scalingFactor[i];
             yScale += ratio * ratio;
             ratio = Ki[i] / scalingFactor[i];
             ydotScale += ratio * ratio;
         }
 
-        if((yScale < 1.0e-10) || (ydotScale < 1.0e-10)){
+        if ((yScale < 1.0e-10) || (ydotScale < 1.0e-10)) {
             step = 1.0e-6;
-        } else{
-            step = 0.01 * Math.sqrt(yScale/ydotScale);
+        } else {
+            step = 0.01 * Math.sqrt(yScale / ydotScale);
         }
 
         // Make a more refined approximation with Euler's method
         var yEuler = [];
-        for(var i = 0; i < ndims; ++i){
+        for (var i = 0; i < ndims; ++i) {
             yEuler[i] = y0[i] + step * Ki[i];
         }
         var ydot = DEParams.ydot(t0 + step, yEuler);
 
         //estimate the 2nd derivative
         var y2dotscale = 0;
-        for(var i = 0; i < ndims; ++i){
+        for (var i = 0; i < ndims; ++i) {
             ratio = (ydot[i] - Ki[i]) / scalingFactor[i];
             y2dotscale += ratio * ratio;
         }
@@ -459,18 +536,18 @@ var solver = (function () {
         //Solve this for 'step' to find the optimal step size
 
         var maxInv2 = Math.max(Math.sqrt(ydotScale), y2dotscale);
-        var tempStep = (maxInv2 < 1.0e-15) ? Math.max(1.0e-6, 0.001 * Math.abs(step)) : Math.pow(0.01/maxInv2, 1.0/DEParams.order);
+        var tempStep = (maxInv2 < 1.0e-15) ? Math.max(1.0e-6, 0.001 * Math.abs(step)) : Math.pow(0.01 / maxInv2, 1.0 / DEParams.order);
 
         step = Math.min(100 * Math.abs(step), tempStep);
         step = Math.max(step, 1.0e-12 * Math.abs(t0));
 
-        if(step < DEParams.minStepSize){
+        if (step < DEParams.minStepSize) {
             step = DEParams.minStepSize;
         }
-        if(step > DEParams.maxStepSize){
+        if (step > DEParams.maxStepSize) {
             step = DEParams.maxStepSize;
         }
-        if(DEParams.reverse){
+        if (DEParams.reverse) {
             step = -step;
         }
         return step;
