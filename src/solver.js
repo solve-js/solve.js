@@ -42,6 +42,7 @@ var solver = (function () {
         params.previousTime = 0;
         params.firstStep = true;
         params.reverse = (t0 < tf);
+        params.useDenseOutput = false;
         params.eventHandlers = [];
         return params;
     };
@@ -255,8 +256,38 @@ var solver = (function () {
             Verify.value(relativeTolerance, "relativeTolerance").always().isNumber();
             Verify.value(integrationMethod, "integrationMethod").whenDefined().isFunction();
 
+            var results = {
+                yVals: [[]],
+                tVals: [],
+                yValsDense: [[]],
+                tValsDense: [],
+                interpFuncs: []
+            };
+
             var DEParams = EquationParameters(deFunction, startTime, endTime, initialConditions);
             var integrator = integrationMethod || s.DormandPrinceIntegrator;
+            var vals = [[]];
+            for(var i = 0; i < initialConditions.length; ++i){
+                vals[i][0] = initialConditions[i];
+            }
+            var time = [];
+            time.push(startTime);
+            var step = RKIntegrator(DEParams, integrator);
+
+
+            if(DEParams.useDenseOutput){
+                //Find some outputs!!
+            } else {
+                var dim = step.state.length;
+                for(var i = 0; i < dim; ++i){
+                    vals[i].push(step.state[i]);
+                }
+                time.push(step.currentTime);
+            }
+
+
+
+
 
 
         }
@@ -526,6 +557,8 @@ var solver = (function () {
         DEParams.previousTime = t;
         DEParams.currentTime = t + dt;
         DEParams.dt = dt;
+        DEParams.Ki = Ki;
+        return DEParams;
     };
 
     var estimateError = function (DEParams, Ki, y, yTmp, dt) {
@@ -669,14 +702,20 @@ var solver = (function () {
     };
 
     //TODO: Interpolation: 4 points per step, user can also specify time vector. Identify start and end points, solve DE, then backtrank and interpolate to find solution at given points
-    var getStepInterpolator = function (DEFunc, Ki, yAtStart, yAtEnd, t0, dt) {
+    var getStepInterpolators = function (DEParams) {
+
+        var dt = DEParams.dt;
+        var t0 = DEParams.previousTime;
+        var tF = DEParams.currentTime;
+        var Ki = DEParams.Ki;
+        var DEFunc = DEParams.ydot;
+        var y = DEParams.previousState;
+        var yNext = DEParams.state;
 
         //First, calculate an approximation of the midpoint
         var midpoint = [];
         var tM = t0 + (dt / 2);
-        var tF = t0 + dt;
         var dim = Ki[0].length;
-        var y = yAtStart;
         for (var i = 0; i < dim; ++i) {
             midpoint[i] = y[i] + ((dt / 2) * ((6025192743 / 30085553152) * Ki[0][i] + (51252292925 / 65400821598) * Ki[2][i] - (2691868925 / 45128329728) * Ki[3][i] + (187940372067 / 1594534317056) * Ki[4][i] - (1776094331 / 19743644256) * Ki[5][i] + (11237099 / 235043384) * Ki[6][i]));
         }
@@ -742,8 +781,7 @@ var solver = (function () {
 
             interpTable[i] = hermitePoly.bind(undefined,z0, z2, z4, fz0, fz01, fz012, fz0123, fz01234, fz012345);
         }
-
-
+        return interpTable;
     };
 
     return s;
