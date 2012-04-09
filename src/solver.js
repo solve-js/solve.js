@@ -21,6 +21,8 @@ var solver = (function () {
         params.y0 = initialCond;
 
         params.dt0 = 0;
+        params.dt = 0;
+        params.Ki = [[]];
         params.dims = y0.length;
         params.atol = absTolerance;
         params.rtol = relTolerance;
@@ -35,7 +37,9 @@ var solver = (function () {
         params.minStep = 0;
         params.maxStep = Math.abs(params.tf - params.t0);
         params.state = initialCond;
+        params.previousState = [];
         params.currentTime = t0;
+        params.previousTime = 0;
         params.firstStep = true;
         params.reverse = (t0 < tf);
         params.eventHandlers = [];
@@ -54,31 +58,32 @@ var solver = (function () {
         return params;
     };
 
-    var InterpolationParameters = function(){
+    var InterpolationParameters = function () {
         var params = Object.create(InterpolationParameters.prototype);
         return params;
     };
 
     //Parameters needed for dense output/interpolation when using Dormand-Prince
-    s.DormandPrinceInterpolator = (function(){
+    s.DormandPrinceInterpolator = (function () {
         var params = InterpolationParameters();
-        /* Last row of the Butcher-array internal weights, elements 0-5. */
-        params.A70 =    35.0 /  384.0;
-        // element 1 is zero, so it is neither stored nor used
-        params.A72 =   500.0 / 1113.0;
-        params.A73 =   125.0 /  192.0;
-        params.A74 = -2187.0 / 6784.0;
-        params.A75 =    11.0 /   84.0;
+        /*
+         // Last row of the Butcher-array internal weights, elements 0-5.
+         params.A70 =    35.0 /  384.0;
+         // element 1 is zero, so it is neither stored nor used
+         params.A72 =   500.0 / 1113.0;
+         params.A73 =   125.0 /  192.0;
+         params.A74 = -2187.0 / 6784.0;
+         params.A75 =    11.0 /   84.0;
 
-        /* Shampine (1986) Dense output, elements 0-6. */
-        params.D0 =  -12715105075.0 /  11282082432.0;
-        // element 1 is zero
-        params.D2 =   87487479700.0 /  32700410799.0;
-        params.D3 =  -10690763975.0 /   1880347072.0;
-        params.D4 =  701980252875.0 / 199316789632.0;
-        params.D5 =   -1453857185.0 /    822651844.0;
-        params.D6 =      69997945.0 /     29380423.0;
-
+         // Shampine (1986) Dense output, elements 0-6.
+         params.D0 =  -12715105075.0 /  11282082432.0;
+         // element 1 is zero
+         params.D2 =   87487479700.0 /  32700410799.0;
+         params.D3 =  -10690763975.0 /   1880347072.0;
+         params.D4 =  701980252875.0 / 199316789632.0;
+         params.D5 =   -1453857185.0 /    822651844.0;
+         params.D6 =      69997945.0 /     29380423.0;
+         */
         //Interpolation State Vectors
         params.V1 = [];
         params.V2 = [];
@@ -87,15 +92,33 @@ var solver = (function () {
 
         params.initialized = false;
 
-        params.initialize = function(Ki){
-            if(!params.initialized){
+        params.initialize = function (Ki) {
+            if (!params.initialized) {
                 var dim = Ki[0].length;
-                var k0,k2,k3,k4,k5,k6;
+                var k0, k2, k3, k4, k5, k6;
                 var V1 = params.V1;
                 var V2 = params.V2;
                 var V3 = params.V3;
+                var V4 = params.V4;
 
-                for(var i = 0; i < dim; ++i){
+                /* Last row of the Butcher-array internal weights, elements 0-5. */
+                var A70 = 35.0 / 384.0;
+                // element 1 is zero, so it is neither stored nor used
+                var A72 = 500.0 / 1113.0;
+                var A73 = 125.0 / 192.0;
+                var A74 = -2187.0 / 6784.0;
+                var A75 = 11.0 / 84.0;
+
+                /* Shampine (1986) Dense output, elements 0-6. */
+                var D0 = -12715105075.0 / 11282082432.0;
+                // element 1 is zero
+                var D2 = 87487479700.0 / 32700410799.0;
+                var D3 = -10690763975.0 / 1880347072.0;
+                var D4 = 701980252875.0 / 199316789632.0;
+                var D5 = -1453857185.0 / 822651844.0;
+                var D6 = 69997945.0 / 29380423.0;
+
+                for (var i = 0; i < dim; ++i) {
                     k0 = Ki[0][i];
                     k2 = Ki[2][i];
                     k3 = Ki[3][i];
@@ -103,11 +126,15 @@ var solver = (function () {
                     k5 = Ki[5][i];
                     k6 = Ki[6][i];
 
+                    V1[i] = A70 * k0 + A72 * k2 + A73 * k3 + A74 * k4 + A75 * k5;
+                    V2[i] = k0 - V1[i];
+                    V3[i] = V1[i] - V2[i] - k6;
+                    V4[i] = D0 * k0 + D2 * k2 + D3 * k3 + D4 * k4 + D5 * k5 + D6 * k6;
                 }
+                params.initialized = true;
             }
-
-        }
-
+        };
+        return params;
     })();
 
     //Provides the coefficients for Dormand-Prince integration
@@ -430,9 +457,7 @@ var solver = (function () {
         var t = DEParams.currentTime;
         var ydot = DEParams.ydot;
         var y = DEParams.state;
-        var Ki = [
-            []
-        ];
+        var Ki = DEParams.Ki;
         var yTmp = [];
         var dt = DEParams.dt;
         var firstSameAsLast = DEParams.firstSameAsLast;
@@ -468,7 +493,7 @@ var solver = (function () {
                 Ki[k] = ydot(t + C[k - 1] * dt, yTmp);
             }
 
-            // Final stage for error calculations
+            // Final step for finding yNext. After this step, yTmp will be yNext
             for (var i = 0; i < dim; ++i) {
                 var su = B[0] * Ki[0][i];
                 for (var j = 0; j < stages; ++j) {
@@ -495,9 +520,12 @@ var solver = (function () {
             }
         }
 
-        //After a good step has been calculated, use interpolation to find points for dense output
-
-
+        //Step is good, store the state from this step for future use
+        DEParams.previousState = y;
+        DEParams.state = yTmp;
+        DEParams.previousTime = t;
+        DEParams.currentTime = t + dt;
+        DEParams.dt = dt;
     };
 
     var estimateError = function (DEParams, Ki, y, yTmp, dt) {
@@ -641,7 +669,80 @@ var solver = (function () {
     };
 
     //TODO: Interpolation: 4 points per step, user can also specify time vector. Identify start and end points, solve DE, then backtrank and interpolate to find solution at given points
-    var stepInterpolator = function(){
+    var getStepInterpolator = function (DEFunc, Ki, yAtStart, yAtEnd, t0, dt) {
+
+        //First, calculate an approximation of the midpoint
+        var midpoint = [];
+        var tM = t0 + (dt / 2);
+        var tF = t0 + dt;
+        var dim = Ki[0].length;
+        var y = yAtStart;
+        for (var i = 0; i < dim; ++i) {
+            midpoint[i] = y[i] + ((dt / 2) * ((6025192743 / 30085553152) * Ki[0][i] + (51252292925 / 65400821598) * Ki[2][i] - (2691868925 / 45128329728) * Ki[3][i] + (187940372067 / 1594534317056) * Ki[4][i] - (1776094331 / 19743644256) * Ki[5][i] + (11237099 / 235043384) * Ki[6][i]));
+        }
+
+        //For each dimension, we know y_n, y'_n, y_n+1, y'_n+1, and now y_n+0.5. We can also find y'_n+0.5
+        //These points will be used to find a quintic interpolating polynomial for the interval
+        var Kmidp = DEFunc(tM, midpoint);
+
+        //To generate the Hermite polynomial, we will use a system of divided differences
+        var interpTable = [];
+        var z0, z1, z2, z3, z4, z5,
+            fz0, fz1, fz2, fz3, fz4, fz5,
+            fz01, fz12, fz23, fz34, fz45,
+            fz012, fz123, fz234, fz345,
+            fz0123, fz1234, fz2345,
+            fz01234, fz12345,
+            fz012345;
+        var hermitePoly = function(z0, z2, z4, fz0, fz01, fz012, fz0123, fz01234, fz012345, t){
+            var t1 = t-z0;
+            var t1sq = (t1 * t1);
+            var t2 = t-z2;
+            var t2sq = (t3 * t3);
+            var t3 = t-z4;
+
+            var yI = fz0 + (fz01 * t1) + (fz012 * t1sq) + (fz0123 * t1sq * t2) + (fz01234 * t1sq * t2sq) + (fz012345 * t1sq * t2sq * t3);
+            return yI;
+        };
+        for (var i = 0; i < dim; i++) {
+
+            z0 = t0;
+            z1 = t0;
+            z2 = tM;
+            z3 = tM;
+            z4 = tF;
+            z5 = tF;
+
+            fz0 = y[i];
+            fz1 = y[i];
+            fz2 = midpoint[i];
+            fz3 = midpoint[i];
+            fz4 = yNext[i];
+            fz5 = yNext[i];
+
+            fz01 = Ki[0][i];
+            fz12 = (fz2 - fz1) / (z2 - z1);
+            fz23 = Kmidp[i];
+            fz34 = (fz4 - fz3)/(z4 - z3);
+            fz45 = Ki[6][i];
+
+            fz012 = (fz12 - fz01)/(z2 - z0);
+            fz123 = (fz23 - fz12)/(z3 - z1);
+            fz234 = (fz34 - fz23)/(z4 - z2);
+            fz345 = (fz45 - fz34)/(z5 - z3);
+
+            fz0123 = (fz123 - fz012)/(z3 - z0);
+            fz1234 = (fz234 - fz123)/(z4 - z1);
+            fz2345 = (fz345 - fz234)/(z5 - z2);
+
+            fz01234 = (fz1234 - fz0123)/(z4 - z0);
+            fz12345 = (fz2345 - fz1234)/(z5 - z1);
+
+            fz012345 = (fz12345 - fz01234)/(z5 - z0);
+
+            interpTable[i] = hermitePoly.bind(undefined,z0, z2, z4, fz0, fz01, fz012, fz0123, fz01234, fz012345);
+        }
+
 
     };
 
