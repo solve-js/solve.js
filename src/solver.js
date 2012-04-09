@@ -501,6 +501,7 @@ var solver = (function () {
     };
 
     var estimateError = function (DEParams, Ki, y, yTmp, dt) {
+        "use strict"
         var error = 0;
         var E1 = 71.0 / 57600.0;
         //E2 == 0
@@ -532,6 +533,7 @@ var solver = (function () {
 
 
     var calculateFirstTimeStep = function (DEParams, Ki) {
+        "use strict"
         var atol = DEParams.atol;
         var rtol = DEParams.rtol;
         var y = DEParams.state;
