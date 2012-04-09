@@ -44,8 +44,8 @@ var solver = (function () {
 
     var IntegratorParameters = function (A_coefficients, B_coefficients, C_coefficients, interpolationFunc, firstSameAsLast) {
         var params = Object.create(IntegratorParameters.prototype);
-        IntegratorParameters.prototype.
-            params.A = A_coefficients;
+
+        params.A = A_coefficients;
         params.B = B_coefficients;
         params.C = C_coefficients;
         params.stages = C_coefficients.length + 1;
@@ -53,6 +53,62 @@ var solver = (function () {
         params.firstSameAsLast = firstSameAsLast || false;
         return params;
     };
+
+    var InterpolationParameters = function(){
+        var params = Object.create(InterpolationParameters.prototype);
+        return params;
+    };
+
+    //Parameters needed for dense output/interpolation when using Dormand-Prince
+    s.DormandPrinceInterpolator = (function(){
+        var params = InterpolationParameters();
+        /* Last row of the Butcher-array internal weights, elements 0-5. */
+        params.A70 =    35.0 /  384.0;
+        // element 1 is zero, so it is neither stored nor used
+        params.A72 =   500.0 / 1113.0;
+        params.A73 =   125.0 /  192.0;
+        params.A74 = -2187.0 / 6784.0;
+        params.A75 =    11.0 /   84.0;
+
+        /* Shampine (1986) Dense output, elements 0-6. */
+        params.D0 =  -12715105075.0 /  11282082432.0;
+        // element 1 is zero
+        params.D2 =   87487479700.0 /  32700410799.0;
+        params.D3 =  -10690763975.0 /   1880347072.0;
+        params.D4 =  701980252875.0 / 199316789632.0;
+        params.D5 =   -1453857185.0 /    822651844.0;
+        params.D6 =      69997945.0 /     29380423.0;
+
+        //Interpolation State Vectors
+        params.V1 = [];
+        params.V2 = [];
+        params.V3 = [];
+        params.V4 = [];
+
+        params.initialized = false;
+
+        params.initialize = function(Ki){
+            if(!params.initialized){
+                var dim = Ki[0].length;
+                var k0,k2,k3,k4,k5,k6;
+                var V1 = params.V1;
+                var V2 = params.V2;
+                var V3 = params.V3;
+
+                for(var i = 0; i < dim; ++i){
+                    k0 = Ki[0][i];
+                    k2 = Ki[2][i];
+                    k3 = Ki[3][i];
+                    k4 = Ki[4][i];
+                    k5 = Ki[5][i];
+                    k6 = Ki[6][i];
+
+                }
+            }
+
+        }
+
+    })();
 
     //Provides the coefficients for Dormand-Prince integration
     s.DormandPrinceIntegrator = (function () {
@@ -357,7 +413,7 @@ var solver = (function () {
         }
     };
 
-    RKIntegrator = function (DEParams, IntegratorParams) {
+    var RKIntegrator = function (DEParams, IntegratorParams) {
         "use strict"
         Verify.value(DEParams, "DEParams").always().isPrototypeOf(EquationParameters);
         Verify.value(IntegratorParams, "IntegratorParams").always().isPrototypeOf(IntegratorParameters);
@@ -583,7 +639,9 @@ var solver = (function () {
     };
 
     //TODO: Interpolation: 4 points per step, user can also specify time vector. Identify start and end points, solve DE, then backtrank and interpolate to find solution at given points
+    var stepInterpolator = function(){
 
+    };
 
     return s;
 
