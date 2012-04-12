@@ -277,6 +277,7 @@ var solver = (function () {
 
             if(DEParams.useDenseOutput){
                 //Find some outputs!!
+
             } else {
                 var dim = step.state.length;
                 for(var i = 0; i < dim; ++i){
