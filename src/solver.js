@@ -24,8 +24,8 @@ var solver = (function () {
         params.dt = 0;
         params.Ki = [[]];
         params.dims = y0.length;
-        params.atol = absTolerance;
-        params.rtol = relTolerance;
+        params.atol = absTolerance || 0.1; //TODO: Find better/realistic defaults for these tolerances
+        params.rtol = relTolerance || 0.1;
 
         /*
          * Safety Factor, Max Growth Rate, and Min Shrink Rate all taken from Apache Commons Math
@@ -65,6 +65,10 @@ var solver = (function () {
     };
 
     //Parameters needed for dense output/interpolation when using Dormand-Prince
+    /**
+     *
+     * @type {InterpolationParameters}
+     */
     s.DormandPrinceInterpolator = (function () {
         var params = InterpolationParameters();
         /*
@@ -139,6 +143,11 @@ var solver = (function () {
     })();
 
     //Provides the coefficients for Dormand-Prince integration
+    /**
+     *
+     * @type {IntegratorParameters}
+     * @description Holds an object containing the parameters needed for the integrator to integrate using the Dormand-Prince method
+     */
     s.DormandPrinceIntegrator = (function () {
         //Coefficients for  RK45/Dormand-Prince integration
         var A = [
@@ -267,7 +276,8 @@ var solver = (function () {
             var DEParams = EquationParameters(deFunction, startTime, endTime, initialConditions);
             var integrator = integrationMethod || s.DormandPrinceIntegrator;
             var vals = [[]];
-            for(var i = 0; i < initialConditions.length; ++i){
+            var dims = DEParams.dims;
+            for(var i = 0; i < dims; ++i){
                 vals[i][0] = initialConditions[i];
             }
             var time = [];
@@ -279,8 +289,8 @@ var solver = (function () {
                 //Find some outputs!!
 
             } else {
-                var dim = step.state.length;
-                for(var i = 0; i < dim; ++i){
+
+                for(var i = 0; i < i; ++i){
                     vals[i].push(step.state[i]);
                 }
                 time.push(step.currentTime);
@@ -384,6 +394,7 @@ var solver = (function () {
      * @param {Number[]} y An array containing the previous value(s) for the integrated DE. Should always be in an array, even if there is only one value.
      * @param {Number} dt The size of the step to be used in calculating this next step of the integration.
      * @return {Object} Returns an object containing two properties: 'y' and 'error'. 'y' is an array containing the calculated next step for each dimension in the system of Differential Equations.
+     * @depricated
      * 'error' contains an array containing the calculated error for each of the steps returned in 'y'.
      */
     s.dormandPrinceStep = function (ydot, t, y, dt) {
@@ -492,6 +503,7 @@ var solver = (function () {
         var Ki = DEParams.Ki;
         var yTmp = [];
         var dt = DEParams.dt;
+        var tf = DEParams.tf;
         var firstSameAsLast = DEParams.firstSameAsLast;
         var firstStep = DEParams.firstStep;
 
@@ -503,17 +515,29 @@ var solver = (function () {
                 Ki[0] = ydot(t, y);
             }
 
+            //If this is the first step, we need to calculate the starting step size
             if (firstStep) {
-                //If this is the first step, we need to calculate the starting step size
                 if (DEParams.dt0 === 0) {
                     dt = calculateFirstTimeStep(DEParams, Ki);
                 } else {
                     dt = DEParams.dt0;
                 }
                 firstStep = false;
+                DEParams.firstStep = false;
+            }
+
+            if(DEParams.reverse){
+                if(t + dt <= tf){
+                    dt = tf - t;
+                }
+            } else {
+                if(t + dt >= tf){
+                    dt = tf - t;
+                }
             }
 
 
+            //Here, all of the Runge-Kutta stages are calculated.
             for (var k = 1; k < stages; ++k) {
                 for (var j = 0; j < dim; ++j) {
                     var sum = A[k - 1][0] * Ki[0][j];
@@ -541,24 +565,30 @@ var solver = (function () {
             //If the normalized error is >1, reject the step, recalculate the step size and redo the step
             if (error >= 1.0) {
                 var scaleFactor = Math.min(DEParams.maxGrowth, Math.max(DEParams.minReduction, DEParams.safetyFactor * Math.pow(error, exp)));
-                var newDt;
-                if (Math.abs(dt * scaleFactor) < DEParams.minStep) {
-                    newDt = DEParams.reverse ? -DEParams.minStep : DEParams.minStep;
+                dt = dt * scaleFactor;
+                if (Math.abs(dt) < DEParams.minStep) {
+                    dt = DEParams.reverse ? -DEParams.minStep : DEParams.minStep;
                 }
 
-                if (Math.abs(dt * scaleFactor) > DEParams.maxStep) {
-                    newDt = DEParams.reverse ? -DEParams.maxStep : DEParams.maxStep;
+                if (Math.abs(dt) > DEParams.maxStep) {
+                    dt = DEParams.reverse ? -DEParams.maxStep : DEParams.maxStep;
                 }
             }
         }
 
-        //Step is good, store the state from this step for future use
+        //Step is good, store the state from this step for future use, and calculate the next step
         DEParams.previousState = y;
         DEParams.state = yTmp;
         DEParams.previousTime = t;
         DEParams.currentTime = t + dt;
         DEParams.dt = dt;
         DEParams.Ki = Ki;
+        DEParams.error = error;
+
+        //Handle any events
+        //TODO: We probably want to handle events in the parent solver function as well as calculating the next step size there... I think all needed info should be contained in the DEParams object.
+
+
         return DEParams;
     };
 
@@ -593,7 +623,13 @@ var solver = (function () {
         return Math.sqrt(error / dim);
     };
 
-
+    /**
+     * @private
+     * @description Calculates the initial time step based on the initial conditions, the derivative at those points and an estimation of their second derivatives
+     * @param DEParams {EquationParameters}
+     * @param Ki
+     * @return {Number}
+     */
     var calculateFirstTimeStep = function (DEParams, Ki) {
         "use strict"
         var atol = DEParams.atol;
@@ -703,8 +739,13 @@ var solver = (function () {
     };
 
     //TODO: Interpolation: 4 points per step, user can also specify time vector. Identify start and end points, solve DE, then backtrank and interpolate to find solution at given points
+    /**
+     * @description Generates Hermite interpolating functions for the differential equations in their current state. These functions are most accurate over the interval [tCurrent, tCurrent+dt] although they will work outside the interval as well.
+     * @param DEParams {EquationParameters} The object containing the current state of the differential equation being solved
+     * @return {Array} Retuns an array of functions that can be used for interpolation in each of the dimensions in the system
+     */
     var getStepInterpolators = function (DEParams) {
-
+        "use strict"
         var dt = DEParams.dt;
         var t0 = DEParams.previousTime;
         var tF = DEParams.currentTime;
@@ -780,6 +821,9 @@ var solver = (function () {
 
             fz012345 = (fz12345 - fz01234)/(z5 - z0);
 
+            //Take these interpolating coefficients and use them to curry the interpolating function.
+            //The array interpTable will contain one instance of the function for each dimension in the system of differential equations.
+            //TODO: If performance here is bad, consider just returning the coefficients and constructing the function as needed.
             interpTable[i] = hermitePoly.bind(undefined,z0, z2, z4, fz0, fz01, fz012, fz0123, fz01234, fz012345);
         }
         return interpTable;
