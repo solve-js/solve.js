@@ -35,7 +35,7 @@ var solver = (function () {
          */
         params.safetyFactor = 0.9;
         params.minReduction = 0.2;
-        params.maxGrowth = 2.0;
+        params.maxGrowth = 5;
 
         params.minStep = 0;
         params.maxStep = Math.abs(params.tf - params.t0);
@@ -305,6 +305,7 @@ var solver = (function () {
             if(DEParams.dt0 === 0){
                 DEParams.dt = calculateFirstTimeStep(DEParams, integrator);
             }
+            DEParams.dense = true;
             while (!DEParams.finished){
 
                 do{
@@ -318,18 +319,34 @@ var solver = (function () {
 
                 //otherwise, the step is good
 
-                for (var i = 0; i < dims; ++i) {
-                    vals[i].push(DEParams.state[i]);
-                    DEParams.yDotStart[i] = DEParams.yDotEnd[i];
-                    //DEParams.previousState[i] = DEParams.state[i];
-                }
                 DEParams.previousTime = DEParams.currentTime;
                 DEParams.currentTime = DEParams.currentTime + DEParams.dt;
-                time.push(DEParams.currentTime);
+                if(DEParams.dense){
+                    DEParams.interpFuncs = getStepInterpolators(DEParams);
+                    //generate 3 interpolated points: midpoint and an equidistant point on each side
+                    var midp = DEParams.previousTime + (DEParams.dt/2);
+                    var pt1 = DEParams.previousTime + ((midp - DEParams.previousTime)/2);
+                    var pt2 = DEParams.currentTime - ((DEParams.currentTime - midp)/2);
+                    for(var i = 0; i < DEParams.interpFuncs.length; ++i){
+                        var fn = DEParams.interpFuncs[i];
+                        vals[i].push(fn(pt1));
+                        vals[i].push(fn(midp));
+                        vals[i].push(fn(pt2));
+                    }
+                    time.push(pt1);
+                    time.push(midp);
+                    time.push(pt2);
+                }
+                for (var i = 0; i < dims; ++i) {
+                    vals[i].push(DEParams.state[i]);
+                    //DEParams.yDotStart[i] = DEParams.yDotEnd[i];
+                    //DEParams.previousState[i] = DEParams.state[i];
+                }
 
+                time.push(DEParams.currentTime);
+                DEParams.yDotStart = DEParams.yDotEnd;
                 //figure out the next time step
                 DEParams.dt = getNextTimeStep(DEParams);
-
 
 
                 //handle events...
@@ -530,7 +547,7 @@ var solver = (function () {
         }
     };
 
-    var RKIntegrator2 = function (DEParams, IntegratorParams) {
+    var RKIntegrator = function (DEParams, IntegratorParams) {
         "use strict"
         Verify.value(DEParams, "DEParams").always().isPrototypeOf(EquationParameters);
         Verify.value(IntegratorParams, "IntegratorParams").always().isPrototypeOf(IntegratorParameters);
@@ -561,10 +578,12 @@ var solver = (function () {
         var solutionForErrorEstimation = [];
 
             //If we don't already have K1 from the previous step, calculate it.
-            if(!firstSameAsLast || firstStep) {
+            if(!firstSameAsLast || firstStep || (yDotStart === 'undefined')) {
                 yDotStart = ydot(t, y);
                 firstStep = false;
             }
+
+
         yDotStart.forEach(function (v, i, a) {
             var k = v * dt;
             Ki[0][i] = k;
@@ -606,151 +625,6 @@ var solver = (function () {
         return DEParams;
     };
 
-    var RKIntegrator = function (DEParams, IntegratorParams) {
-        "use strict"
-        Verify.value(DEParams, "DEParams").always().isPrototypeOf(EquationParameters);
-        Verify.value(IntegratorParams, "IntegratorParams").always().isPrototypeOf(IntegratorParameters);
-
-        //Coefficients for integration
-        var A = IntegratorParams.A;
-
-        var B = IntegratorParams.B;
-
-        var C = IntegratorParams.C;
-
-        var dim = DEParams.dims;
-        var stages = IntegratorParams.stages;
-        var t = DEParams.currentTime;
-        var ydot = DEParams.ydot;
-        var y = DEParams.state;
-        var Ki = DEParams.Ki;
-        var yTmp = [];
-        var dt = DEParams.dt;
-        var tf = DEParams.tf;
-        var firstSameAsLast = IntegratorParams.firstSameAsLast;
-        var firstStep = DEParams.firstStep;
-        var finalStep = DEParams.finalStep;
-
-        var exp = -1.0 / IntegratorParams.order;
-        var error = 10;
-        while (error >= 1.0) {
-            if (finalStep) {
-                DEParams.finished = true;
-            }
-            if (firstStep || !firstSameAsLast) {
-                //If this is the first step, we need to calculate the starting step size
-                if (firstStep) {
-                    if (DEParams.dt0 === 0) {
-                        dt = calculateFirstTimeStep(DEParams, IntegratorParams, Ki);
-                    } else {
-                        dt = DEParams.dt0;
-                    }
-                    firstStep = false;
-                    DEParams.firstStep = false;
-                }
-                Ki[0] = ydot(t, y);
-                Ki[0].forEach(function (v, i, a) {
-                    a[i] = v * dt;
-                });
-            }
-
-
-            if (DEParams.reverse) {
-                if (t + dt <= tf) {
-                    dt = tf - t;
-                }
-            } else {
-                if (t + dt >= tf) {
-                    dt = tf - t;
-                }
-            }
-
-            console.log("new Ki-Values");
-            console.log(Ki[0]);
-            //Here, all of the Runge-Kutta stages are calculated.
-            for (var k = 1; k < stages; ++k) {
-                for (var j = 0; j < dim; ++j) {
-                    var sum = A[k - 1][0] * Ki[0][j];
-                    for (var m = 1; m < k; ++m) {
-                        sum += A[k - 1][m] * Ki[m][j];
-                    }
-                    yTmp[j] = y[j] + dt * sum;
-                }
-                Ki[k] = ydot(t + C[k - 1] * dt, yTmp);
-                Ki[k].forEach(function (v, i, a) {
-                    a[i] = v * dt;
-                });
-
-                console.log(Ki[k]);
-            }
-            console.log("");
-
-            // Final step for finding yNext. After this step, yTmp will be yNext
-            for (var i = 0; i < dim; ++i) {
-                var su = B[0] * Ki[0][i];
-                for (var j = 0; j < stages; ++j) {
-                    sum += B[j] * Ki[j][i];
-                }
-                yTmp[i] = y[i] + dt * sum;
-            }
-
-            //Estimate the error for step rejection and step size adjustment
-            var error = estimateError(DEParams, Ki, y, yTmp, dt);
-
-            var scaleFactor = Math.min(DEParams.maxGrowth, Math.max(DEParams.minReduction, DEParams.safetyFactor * Math.pow(error, exp)));
-            //If the normalized error is >1, reject the step, recalculate the step size and redo the step
-            if (error >= 1.0 && false) {
-
-                dt = dt * scaleFactor;
-                if (Math.abs(dt) < DEParams.minStep) {
-                    dt = DEParams.reverse ? -DEParams.minStep : DEParams.minStep;
-                }
-
-                if (Math.abs(dt) > DEParams.maxStep) {
-                    dt = DEParams.reverse ? -DEParams.maxStep : DEParams.maxStep;
-                }
-            }
-        }
-
-        //Step is good, store the state from this step for future use, and calculate the next step
-        DEParams.previousState = y;
-        DEParams.state = yTmp;
-        DEParams.previousTime = t;
-        DEParams.currentTime = t + dt;
-        DEParams.error = error;
-        var interp = getStepInterpolators(DEParams);
-        DEParams.interpFuncs.push(interp);
-        DEParams.Ki = [
-            []
-        ];
-        Ki[stages - 1].forEach(function (value, index, array) {
-            DEParams.Ki[0][index] = value;
-        });
-
-        dt = dt * scaleFactor;
-        if (Math.abs(dt) < DEParams.minStep) {
-            dt = DEParams.reverse ? -DEParams.minStep : DEParams.minStep;
-        }
-
-        if (Math.abs(dt) > DEParams.maxStep) {
-            dt = DEParams.reverse ? -DEParams.maxStep : DEParams.maxStep;
-        }
-
-        var nextTime = DEParams.currentTime + dt;
-        if ((DEParams.reverse && nextTime <= DEParams.tf) || (!DEParams.reverse && nextTime >= DEParams.tf)) {
-            dt = DEParams.tf - DEParams.currentTime;
-            DEParams.finalStep = true;
-        }
-        DEParams.dt = DEParams.dt0;
-
-
-        //Handle any events
-        //TODO: We probably want to handle events in the parent solver function as well as calculating the next step size there... I think all needed info should be contained in the DEParams object.
-        //handleEvents(DEParams);
-
-
-        return DEParams;
-    };
 
     var handleEvents = function (DEParams) {
 
@@ -795,7 +669,7 @@ var solver = (function () {
      * @private
      * @description Calculates the initial time step based on the initial conditions, the derivative at those points and an estimation of their second derivatives
      * @param DEParams {EquationParameters}
-     * @param yDot
+     * @param IntegratorParams {IntegratorParameters}
      * @return {Number}
      */
     var calculateFirstTimeStep = function (DEParams, IntegratorParams) {
@@ -889,6 +763,7 @@ var solver = (function () {
      * @param {Number} tolerance The desired error tolerance.
      * @return {Number} Returns the calculated optimal next time step
      */
+    //TODO: Adapt to work with current integration methods. I think that this method will give more control to the user supplied tolerances than the other algorithm
     s.getNextTimeStep = function (dtCurrent, calcError, tolerance) {
         "use strict"
         try {
@@ -910,7 +785,7 @@ var solver = (function () {
         }
     };
 
-    //TODO: Interpolation: 4 points per step, user can also specify time vector. Identify start and end points, solve DE, then backtrank and interpolate to find solution at given points
+    //TODO: Verify this is working as expected. Initial results look right on inspection, but I did not check accuracy
     /**
      * @description Generates Hermite interpolating functions for the differential equations in their current state. These functions are most accurate over the interval [tCurrent, tCurrent+dt] although they will work outside the interval as well.
      * @param DEParams {EquationParameters} The object containing the current state of the differential equation being solved
@@ -950,10 +825,11 @@ var solver = (function () {
             fz01234, fz12345,
             fz012345;
         var hermitePoly = function (z0, z2, z4, fz0, fz01, fz012, fz0123, fz01234, fz012345, t) {
+            console.log(arguments);
             var t1 = t - z0;
             var t1sq = (t1 * t1);
             var t2 = t - z2;
-            var t2sq = (t3 * t3);
+            var t2sq = (t2 * t2);
             var t3 = t - z4;
 
             var yI = fz0 + (fz01 * t1) + (fz012 * t1sq) + (fz0123 * t1sq * t2) + (fz01234 * t1sq * t2sq) + (fz012345 * t1sq * t2sq * t3);
@@ -979,7 +855,7 @@ var solver = (function () {
             fz12 = (fz2 - fz1) / (z2 - z1);
             fz23 = Kmidp[i];
             fz34 = (fz4 - fz3) / (z4 - z3);
-            fz45 = yDotEnd[6][i];
+            fz45 = yDotEnd[i];
 
             fz012 = (fz12 - fz01) / (z2 - z0);
             fz123 = (fz23 - fz12) / (z3 - z1);
@@ -998,7 +874,8 @@ var solver = (function () {
             //Take these interpolating coefficients and use them to curry the interpolating function.
             //The array interpTable will contain one instance of the function for each dimension in the system of differential equations.
             //TODO: If performance here is bad, consider just returning the coefficients and constructing the function as needed.
-            interpTable[i] = hermitePoly.bind(undefined, z0, z2, z4, fz0, fz01, fz012, fz0123, fz01234, fz012345);
+
+            interpTable[i] = hermitePoly.bind(undefined,z0, z2, z4, fz0, fz01, fz012, fz0123, fz01234, fz012345);
         }
         return interpTable;
     };
