@@ -154,10 +154,14 @@ GeneralTest.prototype.testSolverFunction = function () {
     var endTime = 100;
     var stepSize = 1;
 
-    var results = s.solve(func, initialCond, startTime, endTime, stepSize);
-    results.y.forEach(function (value, index, array) {
+    var results = s.modularSolver(func, initialCond, startTime,endTime, 0.1, 0.1, undefined);
+    /*results.y.forEach(function (value, index, array) {
         assertEquals("Length of time vector and all solutions should be equal", results.t.length, value.length);
-    });
+    });*/
+    /*results.yVals.forEach(function(v,i,a){
+        console.log(v);
+    });  */
+    console.log(results);
 };
 /**
  * Test to make sure nothing strange happens with a system of differential equations.
