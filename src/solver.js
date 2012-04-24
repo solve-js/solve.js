@@ -27,8 +27,8 @@ var solver = (function () {
             []
         ];
         params.dims = initialCond.length;
-        params.atol = absTolerance || 0.01; //TODO: Find better/realistic defaults for these tolerances
-        params.rtol = relTolerance || 0.01;
+        params.atol = absTolerance || 1e-5; //TODO: Find better/realistic defaults for these tolerances
+        params.rtol = relTolerance || 1e-5;
 
         /*
          * Safety Factor, Max Growth Rate, and Min Shrink Rate all taken from Apache Commons Math
@@ -51,6 +51,8 @@ var solver = (function () {
         params.reverse = (t0 > tf);
         params.useDenseOutput = false;
         params.interpFuncs = new Array(0);
+        params.inverseInterpFuncs = new Array(0);
+        params.rkError = [];
         params.eventHandlers = [];
         return params;
     };
@@ -289,7 +291,7 @@ var solver = (function () {
                 interpFuncs:[]
             };
 
-            var DEParams = EquationParameters(deFunction, startTime, endTime, initialConditions);
+            var DEParams = EquationParameters(deFunction, startTime, endTime, initialConditions, 1e-5, 1e-5);
             //DEParams.dt0 = 0.1;
             var integrator = integrationMethod || s.DormandPrinceIntegrator;
             var vals = [
@@ -309,7 +311,7 @@ var solver = (function () {
             while (!DEParams.finished){
 
                 do{
-                DEParams = RKIntegrator2(DEParams, integrator);
+                DEParams = RKIntegrator(DEParams, integrator);
                 DEParams.error = estimateError(DEParams);
                 //If the error is too big, reset the step and try again.
                 if(DEParams.error >= 1.0){
@@ -322,20 +324,20 @@ var solver = (function () {
                 DEParams.previousTime = DEParams.currentTime;
                 DEParams.currentTime = DEParams.currentTime + DEParams.dt;
                 if(DEParams.dense){
-                    DEParams.interpFuncs = getStepInterpolators(DEParams);
+                    DEParams.interpFuncs = getInterpolatingFunctions(DEParams);
                     //generate 3 interpolated points: midpoint and an equidistant point on each side
-                    var midp = DEParams.previousTime + (DEParams.dt/2);
-                    var pt1 = DEParams.previousTime + ((midp - DEParams.previousTime)/2);
-                    var pt2 = DEParams.currentTime - ((DEParams.currentTime - midp)/2);
-                    for(var i = 0; i < DEParams.interpFuncs.length; ++i){
-                        var fn = DEParams.interpFuncs[i];
-                        vals[i].push(fn(pt1));
-                        vals[i].push(fn(midp));
-                        vals[i].push(fn(pt2));
-                    }
-                    time.push(pt1);
-                    time.push(midp);
-                    time.push(pt2);
+                    //var midp = DEParams.previousTime + (DEParams.dt/2);
+                    //var pt1 = DEParams.previousTime + ((midp - DEParams.previousTime)/2);
+                    //var pt2 = DEParams.currentTime - ((DEParams.currentTime - midp)/2);
+                    //for(var i = 0; i < DEParams.interpFuncs.length; ++i){
+                      //  var fn = DEParams.interpFuncs[i];
+                        //vals[i].push(fn(pt1));
+                        //vals[i].push(fn(midp));
+                        //vals[i].push(fn(pt2));
+                    //}
+                    //time.push(pt1);
+                    //time.push(midp);
+                    //time.push(pt2);
                 }
                 for (var i = 0; i < dims; ++i) {
                     vals[i].push(DEParams.state[i]);
@@ -346,7 +348,8 @@ var solver = (function () {
                 time.push(DEParams.currentTime);
                 DEParams.yDotStart = DEParams.yDotEnd;
                 //figure out the next time step
-                DEParams.dt = getNextTimeStep(DEParams);
+                DEParams.dt = getNextTimeStep2(DEParams.dt, DEParams.rkError, 1e-5);
+                //DEParams.dt = getNextTimeStep(DEParams);
 
 
                 //handle events...
@@ -615,6 +618,7 @@ var solver = (function () {
         for(var dim = 0; dim < dims; ++dim){
             DEParams.previousState[dim] = y[dim];
             DEParams.state[dim] = solution[dim];
+            DEParams.rkError[dim] = (solution[dim] - solutionForErrorEstimation[dim]);
         }
         DEParams.yDotStart = yDotStart;
         DEParams.yDotEnd = yDotTmp;
@@ -764,7 +768,7 @@ var solver = (function () {
      * @return {Number} Returns the calculated optimal next time step
      */
     //TODO: Adapt to work with current integration methods. I think that this method will give more control to the user supplied tolerances than the other algorithm
-    s.getNextTimeStep = function (dtCurrent, calcError, tolerance) {
+    var getNextTimeStep2 = function (dtCurrent, calcError, tolerance) {
         "use strict"
         try {
             Verify.value(dtCurrent, "dtCurrent").always().isNumber().isFinite();
@@ -772,13 +776,13 @@ var solver = (function () {
             Verify.value(tolerance, "tolerance").always().isNumber().isFinite();
 
             //Calculate next step based on the largest error
-            var maxError = Math.max.apply(Math, calcError);
-            var s = Math.pow((tolerance * dtCurrent) / (2 * maxError), (1 / 5));
+            var maxError = Math.abs(Math.max.apply(Math, calcError));
+            var scale = Math.pow((tolerance * dtCurrent) / (2 * maxError), (1 / 5));
             //TODO: Check error against tolerance. If the error exceeds allowed tolerance, this is a failed step. We may either redo the step with a smaller stepsize, or we may throw an error.
             //'s' is limited to values >0.1 and <5
-            s = Math.min(s, 5);
-            s = Math.max(s, 0.1);
-            var dtNext = s * dtCurrent;
+            scale = Math.min(scale, 5);
+            scale = Math.max(scale, 0.1);
+            var dtNext = scale * dtCurrent;
             return dtNext;
         } catch (e) {
             throw e;
@@ -791,7 +795,7 @@ var solver = (function () {
      * @param DEParams {EquationParameters} The object containing the current state of the differential equation being solved
      * @return {Array} Retuns an array of functions that can be used for interpolation in each of the dimensions in the system
      */
-    var getStepInterpolators = function (DEParams) {
+    var getInterpolatingFunctions = function (DEParams) {
         "use strict"
         var dt = DEParams.dt;
         var t0 = DEParams.previousTime;
@@ -856,6 +860,99 @@ var solver = (function () {
             fz23 = Kmidp[i];
             fz34 = (fz4 - fz3) / (z4 - z3);
             fz45 = yDotEnd[i];
+
+            fz012 = (fz12 - fz01) / (z2 - z0);
+            fz123 = (fz23 - fz12) / (z3 - z1);
+            fz234 = (fz34 - fz23) / (z4 - z2);
+            fz345 = (fz45 - fz34) / (z5 - z3);
+
+            fz0123 = (fz123 - fz012) / (z3 - z0);
+            fz1234 = (fz234 - fz123) / (z4 - z1);
+            fz2345 = (fz345 - fz234) / (z5 - z2);
+
+            fz01234 = (fz1234 - fz0123) / (z4 - z0);
+            fz12345 = (fz2345 - fz1234) / (z5 - z1);
+
+            fz012345 = (fz12345 - fz01234) / (z5 - z0);
+
+            //Take these interpolating coefficients and use them to curry the interpolating function.
+            //The array interpTable will contain one instance of the function for each dimension in the system of differential equations.
+            //TODO: If performance here is bad, consider just returning the coefficients and constructing the function as needed.
+
+            interpTable[i] = hermitePoly.bind(undefined,z0, z2, z4, fz0, fz01, fz012, fz0123, fz01234, fz012345);
+        }
+        return interpTable;
+    };
+
+    var getInverseInterpolatingFunctions = function (DEParams){
+        "use strict"
+        var dt = DEParams.dt;
+        var t0 = DEParams.previousTime;
+        var tF = DEParams.currentTime;
+        var yDot0= DEParams.yDotStart;
+        var yDotF = DEParams.yDotEnd;
+        var Ki = DEParams.Ki;
+        var DEFunc = DEParams.ydot;
+        var y0 = DEParams.previousState;
+        var yNext = DEParams.state;
+
+        //First, calculate an approximation of the midpoint
+        var yMid = [];
+        var tM = t0 + (dt / 2);
+        var dim = Ki[0].length;
+        for (var i = 0; i < dim; ++i) {
+            yMid[i] = y0[i] + ((dt / 2) * ((6025192743 / 30085553152) * Ki[0][i] + (51252292925 / 65400821598) * Ki[2][i] - (2691868925 / 45128329728) * Ki[3][i] + (187940372067 / 1594534317056) * Ki[4][i] - (1776094331 / 19743644256) * Ki[5][i] + (11237099 / 235043384) * Ki[6][i]));
+        }
+
+
+        //For each dimension, we know y_n, y'_n, y_n+1, y'_n+1, and now y_n+0.5. We can also find y'_n+0.5
+        //These points will be used to find a quintic interpolating polynomial for the interval
+        var Kmidp = DEFunc(tM, yMid);
+
+        //To generate the Hermite polynomial, we will use a system of divided differences
+        var interpTable = [];
+        var z0, z1, z2, z3, z4, z5,
+            fz0, fz1, fz2, fz3, fz4, fz5,
+            fz01, fz12, fz23, fz34, fz45,
+            fz012, fz123, fz234, fz345,
+            fz0123, fz1234, fz2345,
+            fz01234, fz12345,
+            fz012345;
+        var hermitePoly = function (z0, z2, z4, fz0, fz01, fz012, fz0123, fz01234, fz012345, t) {
+            console.log(arguments);
+            var t1 = t - z0;
+            var t1sq = (t1 * t1);
+            var t2 = t - z2;
+            var t2sq = (t2 * t2);
+            var t3 = t - z4;
+
+            var yI = fz0 + (fz01 * t1) + (fz012 * t1sq) + (fz0123 * t1sq * t2) + (fz01234 * t1sq * t2sq) + (fz012345 * t1sq * t2sq * t3);
+            return yI;
+        };
+        for (var i = 0; i < dim; i++) {
+            //For the calculation of the inverse, we're looking for a g(y)=t
+            //The independent variables, z0-z5 are the y values at the start, midpoint, and end of the interval
+            z0 = y0[i];
+            z1 = y0[i];
+            z2 = yMid[i];
+            z3 = yMid[i];
+            z4 = yNext[i];
+            z5 = yNext[i];
+
+            //The dependent variables fz0-fz5 are the t values at the start, midpoint, and end of the interval
+            fz0 = t0;
+            fz1 = t0;
+            fz2 = tM;
+            fz3 = tM;
+            fz4 = tF;
+            fz5 = tF;
+
+            //Since this is calculating the inverse, g'(y) = 1/f'(y)
+            fz01 = 1/yDot0[i];
+            fz12 = (fz2 - fz1) / (z2 - z1);
+            fz23 = 1/Kmidp[i];
+            fz34 = (fz4 - fz3) / (z4 - z3);
+            fz45 = 1/yDotF[i];
 
             fz012 = (fz12 - fz01) / (z2 - z0);
             fz123 = (fz23 - fz12) / (z3 - z1);
