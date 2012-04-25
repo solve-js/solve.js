@@ -154,7 +154,7 @@ GeneralTest.prototype.testSolverFunction = function () {
     var endTime = 100;
     var stepSize = 1;
 
-    var results = s.modularSolver(func, initialCond, startTime,endTime, 0.1, 0.1, undefined);
+    var results = s.modularSolver(func, initialCond, startTime,endTime, 0.001, 0.001, undefined);
     /*results.y.forEach(function (value, index, array) {
         assertEquals("Length of time vector and all solutions should be equal", results.t.length, value.length);
     });*/
@@ -178,9 +178,9 @@ GeneralTest.prototype.testSystemOfDifferentialEquations = function () {
     var endTime = this.rigidBody3D.endTime;
     var stepSize = 0.01;
 
-    var results = s.solve(func, initialCond, startTime, endTime, stepSize);
-    assertEquals("Solution should contain 3 dimensions", initialCond.length, results.y.length);
-    assertEquals("Length of time vector and all solutions should be equal", results.t.length, results.y[2].length);
+    var results = s.modularSolver(func, initialCond, startTime, endTime,0.001, 0.001, undefined);
+    assertEquals("Solution should contain 3 dimensions", initialCond.length, results.yVals.length);
+    assertEquals("Length of time vector and all solutions should be equal", results.tVals.length, results.yVals[2].length);
 
     //TODO: Check to see if these results are correct. The solver may not choke, but may return bad results
 };
@@ -215,9 +215,9 @@ GeneralTest.prototype.testAnalyticSolution = function(){
     var end = 25;
     var stepSize = 0.1;
 
-    var numSoln = s.solve(testDE, initCond, start, end, stepSize, s.dormandPrinceStep);
+    var numSoln = s.modularSolver(testDE, initCond, start, end, 1e-10, 1e-10, undefined);
 
-    var analSoln = solution(numSoln.t, initCond);
+    var analSoln = solution(numSoln.tVals, initCond);
 
 
     /**
@@ -227,16 +227,16 @@ GeneralTest.prototype.testAnalyticSolution = function(){
 
     //TODO: Calculate RMS error instead.
     var totalError = [0,0];
-    numSoln.y[0].forEach(function(value, index, array){
+    numSoln.yVals[0].forEach(function(value, index, array){
         var errorSq1 = Math.pow(value - analSoln[0][index], 2);
-        var errorSq2 = Math.pow(numSoln.y[1][index] - analSoln[1][index], 2);
+        var errorSq2 = Math.pow(numSoln.yVals[1][index] - analSoln[1][index], 2);
         totalError[0] += errorSq1;
         totalError[1] += errorSq2;
     });
 
     var rmsError = [];
-    rmsError[0] = Math.sqrt(totalError[0]/numSoln.y[0].length);
-    rmsError[1] = Math.sqrt(totalError[1]/numSoln.y[1].length);
+    rmsError[0] = Math.sqrt(totalError[0]/numSoln.yVals[0].length);
+    rmsError[1] = Math.sqrt(totalError[1]/numSoln.yVals[1].length);
     console.log("RMS Error for state 1: %d", rmsError[0]);
     console.log("RMS Error for state 2: %d", rmsError[1]);
     /*console.log(numSoln.y[0]);
