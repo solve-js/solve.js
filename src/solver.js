@@ -797,6 +797,12 @@ var solver = (function () {
      */
     var getInterpolatingFunctions = function (DEParams) {
         "use strict"
+
+        //Coefficients used for interpolation: taken from "Some Practical Runge-Kutta Formulas" by Lawrence Shampine
+        var B7 = [-33728713/104693760, 2, -30167461/21674880, 7739027/17448960, -19162737/123305984, 0, -26949/363520];
+        var C4 = [6025192743 / 30085553152, 0, 51252292925 / 65400821598, -2691868925 / 45128329728, 187940372067 / 1594534317056, -1776094331 / 19743644256, 11237099 / 235043384];
+        var C5 = [7157/37888, 0, 70925/82362, 10825/56832, -220887/2008064, 80069/1765344, -107/2627, -5/37];
+
         var dt = DEParams.dt;
         var t0 = DEParams.previousTime;
         var tF = DEParams.currentTime;
@@ -808,12 +814,26 @@ var solver = (function () {
         var yNext = DEParams.state;
 
         //First, calculate an approximation of the midpoint
+        var W = [];
+        var V = [];
         var midpoint = [];
+        //var m4 = [];
         var tM = t0 + (dt / 2);
         var dim = Ki[0].length;
         for (var i = 0; i < dim; ++i) {
-            midpoint[i] = y[i] + ((dt / 2) * ((6025192743 / 30085553152) * Ki[0][i] + (51252292925 / 65400821598) * Ki[2][i] - (2691868925 / 45128329728) * Ki[3][i] + (187940372067 / 1594534317056) * Ki[4][i] - (1776094331 / 19743644256) * Ki[5][i] + (11237099 / 235043384) * Ki[6][i]));
+            //Note, in Shampine's formulas, each of these B/C * Ki sums is then multiplied by the step size. This is omitted here, as the Ki values are all already multiplied by dt
+            W[i] = y[i] + ((1 / 2) * ((C5[0] * Ki[0][i]) + (C5[2] * Ki[2][i]) + (C5[3] * Ki[3][i]) + (C5[4] * Ki[4][i]) + (C5[5] * Ki[5][i]) + (C5[6] * Ki[6][i])));
+            V[i] = y[i] + ((B7[0] * Ki[0][i]) + (B7[1] * Ki[1][i]) + (B7[2] * Ki[2][i]) + (B7[3] * Ki[3][i]) + (B7[4] * Ki[4][i]) + /*B7[5] = 0*/ (B7[6] * Ki[6][i]));
+
+            //m4[i] = y[i] + ((1 / 2) * ((C4[0] * Ki[0][i]) + (C4[2] * Ki[2][i]) + (C4[3] * Ki[3][i]) + (C4[4] * Ki[4][i]) + (C4[5] * Ki[5][i]) + (C4[6] * Ki[6][i])));
         }
+
+        var f7 = DEFunc(tM, V);
+        for(var i = 0; i < dim; ++i){
+            midpoint[i] = W[i] + ((dt/2) * (C5[7] * f7[i]));
+        }
+
+
 
         //For each dimension, we know y_n, y'_n, y_n+1, y'_n+1, and now y_n+0.5. We can also find y'_n+0.5
         //These points will be used to find a quintic interpolating polynomial for the interval
