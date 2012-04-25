@@ -162,3 +162,45 @@ CorrectnessTest.prototype.setUp = function () {
         ]
     };
 };
+
+CorrectnessTest.prototype.testHiresIVP = function(){
+    var s = this.solve;
+    var testDE = this.hiresIVP.func;
+
+    var initCond = this.hiresIVP.y0;
+    var start = 0;
+    var end = this.hiresIVP.tf;
+    var rtol = this.hiresIVP.rtol;
+    var atol = this.hiresIVP.atol;
+    var initialStep = this.hiresIVP.dt0;
+    var expected = this.hiresIVP.expectedValues;
+
+    var numSoln = s.modularSolver(testDE, initCond, start, end, atol, rtol, undefined, initialStep);
+    var len = numSoln.tVals.length;
+    numSoln.yVals.forEach(function(v,i,a){
+        var s = v[len-1];
+        console.log("Dim: %d    State: %d    Error: %d", i, s, Math.abs(s - expected[i]));
+    });
+
+};
+
+CorrectnessTest.prototype.testPollutionIVP = function(){
+    var s = this.solve;
+    var testDE = this.pollutionIVP.func;
+
+    var initCond = this.pollutionIVP.y0;
+    var start = this.pollutionIVP.t0;
+    var end = this.pollutionIVP.tf;
+    var rtol = this.pollutionIVP.rtol;
+    var atol = this.pollutionIVP.atol;
+    var initialStep = this.pollutionIVP.dt0;
+    var expected = this.pollutionIVP.expectedValues;
+
+    var numSoln = s.modularSolver(testDE, initCond, start, end, atol, rtol, undefined, initialStep);
+    var len = numSoln.tVals.length;
+    numSoln.yVals.forEach(function(v,i,a){
+        var s = v[len-1];
+        console.log("Dim: %d    State: %d    Error: %d", i, s, Math.abs(s - expected[i]));
+    });
+
+};

@@ -27,8 +27,8 @@ var solver = (function () {
             []
         ];
         params.dims = initialCond.length;
-        params.atol = absTolerance || 1e-5; //TODO: Find better/realistic defaults for these tolerances
-        params.rtol = relTolerance || 1e-5;
+        params.atol = absTolerance || 1e-8; //TODO: Find better/realistic defaults for these tolerances
+        params.rtol = relTolerance || 1e-8;
 
         /*
          * Safety Factor, Max Growth Rate, and Min Shrink Rate all taken from Apache Commons Math
@@ -39,7 +39,7 @@ var solver = (function () {
 
         params.minStep = 0;
         params.maxStep = Math.abs(params.tf - params.t0);
-        params.state = initialCond;
+        params.state = [];
         params.previousState = [];
         params.yDotStart = [];
         params.yDotEnd = [];
@@ -159,7 +159,7 @@ var solver = (function () {
      * @type {IntegratorParameters}
      * @description Holds an object containing the parameters needed for the integrator to integrate using the Dormand-Prince method
      */
-    s.DormandPrinceIntegrator = (function () {
+    s.DormandPrince45Integrator = (function () {
         //Coefficients for  RK45/Dormand-Prince integration
         var A = [
             [1.0 / 5.0],
@@ -268,7 +268,7 @@ var solver = (function () {
         }
     };
 
-    s.modularSolver = function (deFunction, initialConditions, startTime, endTime, absoluteTolerance, relativeTolerance, integrationMethod) {
+    s.modularSolver = function (deFunction, initialConditions, startTime, endTime, absoluteTolerance, relativeTolerance, integrationMethod, initialStep) {
         "use strict"
         try {
             Verify.value(deFunction, "deFunction").always().isFunction();
@@ -291,23 +291,28 @@ var solver = (function () {
                 interpFuncs:[]
             };
 
-            var DEParams = EquationParameters(deFunction, startTime, endTime, initialConditions, 1e-5, 1e-5);
+            var DEParams = EquationParameters(deFunction, startTime, endTime, initialConditions, absoluteTolerance, relativeTolerance);
             //DEParams.dt0 = 0.1;
-            var integrator = integrationMethod || s.DormandPrinceIntegrator;
+            var integrator = integrationMethod || s.DormandPrince45Integrator;
             var vals = [
                 []
             ];
             var dims = DEParams.dims;
             for (var i = 0; i < dims; ++i) {
+
+                vals[i] = [];
                 vals[i][0] = initialConditions[i];
+                DEParams.state[i] = initialConditions[i];
             }
             var time = [];
             time.push(startTime);
 
-            if(DEParams.dt0 === 0){
-                DEParams.dt = calculateFirstTimeStep(DEParams, integrator);
-            }
-            DEParams.dense = true;
+
+                DEParams.dt = initialStep || calculateFirstTimeStep(DEParams, integrator);
+
+
+
+            DEParams.dense = false;
             while (!DEParams.finished){
 
                 do{
@@ -348,8 +353,8 @@ var solver = (function () {
                 time.push(DEParams.currentTime);
                 DEParams.yDotStart = DEParams.yDotEnd;
                 //figure out the next time step
-                DEParams.dt = getNextTimeStep2(DEParams.dt, DEParams.rkError, 1e-5);
-                //DEParams.dt = getNextTimeStep(DEParams);
+                //DEParams.dt = getNextTimeStep2(DEParams.dt, DEParams.rkError, 1e-5);
+                DEParams.dt = getNextTimeStep(DEParams);
 
 
                 //handle events...
@@ -425,27 +430,7 @@ var solver = (function () {
 
     };
 
-    var getNextTimeStep = function(DEParams){
-        var exp = -1/5;
-        var dt = DEParams.dt;
-        var scaleFactor = Math.min(DEParams.maxGrowth, Math.max(DEParams.minReduction, DEParams.safetyFactor * Math.pow(DEParams.error, exp)));
 
-        dt = dt * scaleFactor;
-        if (Math.abs(dt) < DEParams.minStep) {
-            dt = DEParams.reverse ? -DEParams.minStep : DEParams.minStep;
-        }
-
-        if (Math.abs(dt) > DEParams.maxStep) {
-            dt = DEParams.reverse ? -DEParams.maxStep : DEParams.maxStep;
-        }
-        var nextT = DEParams.currentTime + dt;
-        if((DEParams.reverse && (nextT <= DEParams.tf)) || (!DEParams.reverse && (nextT >= DEParams.tf))){
-            dt = DEParams.tf - DEParams.currentTime;
-            DEParams.finalStep = true;
-        }
-        return dt;
-
-    };
 
     /**
      * Calculates the next step in the solution of the Differential Equation using the Dormand-Prince method
@@ -789,6 +774,28 @@ var solver = (function () {
         }
     };
 
+    var getNextTimeStep = function(DEParams){
+        var exp = -1/5;
+        var dt = DEParams.dt;
+        var scaleFactor = Math.min(DEParams.maxGrowth, Math.max(DEParams.minReduction, DEParams.safetyFactor * Math.pow(DEParams.error, exp)));
+
+        dt = dt * scaleFactor;
+        if (Math.abs(dt) < DEParams.minStep) {
+            dt = DEParams.reverse ? -DEParams.minStep : DEParams.minStep;
+        }
+
+        if (Math.abs(dt) > DEParams.maxStep) {
+            dt = DEParams.reverse ? -DEParams.maxStep : DEParams.maxStep;
+        }
+        var nextT = DEParams.currentTime + dt;
+        if((DEParams.reverse && (nextT <= DEParams.tf)) || (!DEParams.reverse && (nextT >= DEParams.tf))){
+            dt = DEParams.tf - DEParams.currentTime;
+            DEParams.finalStep = true;
+        }
+        return dt;
+
+    };
+
     //TODO: Verify this is working as expected. Initial results look right on inspection, but I did not check accuracy
     /**
      * @description Generates Hermite interpolating functions for the differential equations in their current state. These functions are most accurate over the interval [tCurrent, tCurrent+dt] although they will work outside the interval as well.
@@ -797,6 +804,12 @@ var solver = (function () {
      */
     var getInterpolatingFunctions = function (DEParams) {
         "use strict"
+
+        //Coefficients used for interpolation: taken from "Some Practical Runge-Kutta Formulas" by Lawrence Shampine
+        var B7 = [-33728713/104693760, 2, -30167461/21674880, 7739027/17448960, -19162737/123305984, 0, -26949/363520];
+        var C4 = [6025192743 / 30085553152, 0, 51252292925 / 65400821598, -2691868925 / 45128329728, 187940372067 / 1594534317056, -1776094331 / 19743644256, 11237099 / 235043384];
+        var C5 = [7157/37888, 0, 70925/82362, 10825/56832, -220887/2008064, 80069/1765344, -107/2627, -5/37];
+
         var dt = DEParams.dt;
         var t0 = DEParams.previousTime;
         var tF = DEParams.currentTime;
@@ -808,12 +821,26 @@ var solver = (function () {
         var yNext = DEParams.state;
 
         //First, calculate an approximation of the midpoint
+        var W = [];
+        var V = [];
         var midpoint = [];
+        //var m4 = [];
         var tM = t0 + (dt / 2);
         var dim = Ki[0].length;
         for (var i = 0; i < dim; ++i) {
-            midpoint[i] = y[i] + ((dt / 2) * ((6025192743 / 30085553152) * Ki[0][i] + (51252292925 / 65400821598) * Ki[2][i] - (2691868925 / 45128329728) * Ki[3][i] + (187940372067 / 1594534317056) * Ki[4][i] - (1776094331 / 19743644256) * Ki[5][i] + (11237099 / 235043384) * Ki[6][i]));
+            //Note, in Shampine's formulas, each of these B/C * Ki sums is then multiplied by the step size. This is omitted here, as the Ki values are all already multiplied by dt
+            W[i] = y[i] + ((1 / 2) * ((C5[0] * Ki[0][i]) + (C5[2] * Ki[2][i]) + (C5[3] * Ki[3][i]) + (C5[4] * Ki[4][i]) + (C5[5] * Ki[5][i]) + (C5[6] * Ki[6][i])));
+            V[i] = y[i] + ((B7[0] * Ki[0][i]) + (B7[1] * Ki[1][i]) + (B7[2] * Ki[2][i]) + (B7[3] * Ki[3][i]) + (B7[4] * Ki[4][i]) + /*B7[5] = 0*/ (B7[6] * Ki[6][i]));
+
+            //m4[i] = y[i] + ((1 / 2) * ((C4[0] * Ki[0][i]) + (C4[2] * Ki[2][i]) + (C4[3] * Ki[3][i]) + (C4[4] * Ki[4][i]) + (C4[5] * Ki[5][i]) + (C4[6] * Ki[6][i])));
         }
+
+        var f7 = DEFunc(tM, V);
+        for(var i = 0; i < dim; ++i){
+            midpoint[i] = W[i] + ((dt/2) * (C5[7] * f7[i]));
+        }
+
+
 
         //For each dimension, we know y_n, y'_n, y_n+1, y'_n+1, and now y_n+0.5. We can also find y'_n+0.5
         //These points will be used to find a quintic interpolating polynomial for the interval
