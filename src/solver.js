@@ -27,8 +27,8 @@ var solver = (function () {
             []
         ];
         params.dims = initialCond.length;
-        params.atol = absTolerance || 1e-5; //TODO: Find better/realistic defaults for these tolerances
-        params.rtol = relTolerance || 1e-5;
+        params.atol = absTolerance || 1e-8; //TODO: Find better/realistic defaults for these tolerances
+        params.rtol = relTolerance || 1e-8;
 
         /*
          * Safety Factor, Max Growth Rate, and Min Shrink Rate all taken from Apache Commons Math
@@ -39,7 +39,7 @@ var solver = (function () {
 
         params.minStep = 0;
         params.maxStep = Math.abs(params.tf - params.t0);
-        params.state = initialCond;
+        params.state = [];
         params.previousState = [];
         params.yDotStart = [];
         params.yDotEnd = [];
@@ -159,7 +159,7 @@ var solver = (function () {
      * @type {IntegratorParameters}
      * @description Holds an object containing the parameters needed for the integrator to integrate using the Dormand-Prince method
      */
-    s.DormandPrinceIntegrator = (function () {
+    s.DormandPrince45Integrator = (function () {
         //Coefficients for  RK45/Dormand-Prince integration
         var A = [
             [1.0 / 5.0],
@@ -268,7 +268,7 @@ var solver = (function () {
         }
     };
 
-    s.modularSolver = function (deFunction, initialConditions, startTime, endTime, absoluteTolerance, relativeTolerance, integrationMethod) {
+    s.modularSolver = function (deFunction, initialConditions, startTime, endTime, absoluteTolerance, relativeTolerance, integrationMethod, initialStep) {
         "use strict"
         try {
             Verify.value(deFunction, "deFunction").always().isFunction();
@@ -291,23 +291,28 @@ var solver = (function () {
                 interpFuncs:[]
             };
 
-            var DEParams = EquationParameters(deFunction, startTime, endTime, initialConditions, 1e-5, 1e-5);
+            var DEParams = EquationParameters(deFunction, startTime, endTime, initialConditions, absoluteTolerance, relativeTolerance);
             //DEParams.dt0 = 0.1;
-            var integrator = integrationMethod || s.DormandPrinceIntegrator;
+            var integrator = integrationMethod || s.DormandPrince45Integrator;
             var vals = [
                 []
             ];
             var dims = DEParams.dims;
             for (var i = 0; i < dims; ++i) {
+
+                vals[i] = [];
                 vals[i][0] = initialConditions[i];
+                DEParams.state[i] = initialConditions[i];
             }
             var time = [];
             time.push(startTime);
 
-            if(DEParams.dt0 === 0){
-                DEParams.dt = calculateFirstTimeStep(DEParams, integrator);
-            }
-            DEParams.dense = true;
+
+                DEParams.dt = initialStep || calculateFirstTimeStep(DEParams, integrator);
+
+
+
+            DEParams.dense = false;
             while (!DEParams.finished){
 
                 do{
@@ -348,8 +353,8 @@ var solver = (function () {
                 time.push(DEParams.currentTime);
                 DEParams.yDotStart = DEParams.yDotEnd;
                 //figure out the next time step
-                DEParams.dt = getNextTimeStep2(DEParams.dt, DEParams.rkError, 1e-5);
-                //DEParams.dt = getNextTimeStep(DEParams);
+                //DEParams.dt = getNextTimeStep2(DEParams.dt, DEParams.rkError, 1e-5);
+                DEParams.dt = getNextTimeStep(DEParams);
 
 
                 //handle events...
@@ -425,27 +430,7 @@ var solver = (function () {
 
     };
 
-    var getNextTimeStep = function(DEParams){
-        var exp = -1/5;
-        var dt = DEParams.dt;
-        var scaleFactor = Math.min(DEParams.maxGrowth, Math.max(DEParams.minReduction, DEParams.safetyFactor * Math.pow(DEParams.error, exp)));
 
-        dt = dt * scaleFactor;
-        if (Math.abs(dt) < DEParams.minStep) {
-            dt = DEParams.reverse ? -DEParams.minStep : DEParams.minStep;
-        }
-
-        if (Math.abs(dt) > DEParams.maxStep) {
-            dt = DEParams.reverse ? -DEParams.maxStep : DEParams.maxStep;
-        }
-        var nextT = DEParams.currentTime + dt;
-        if((DEParams.reverse && (nextT <= DEParams.tf)) || (!DEParams.reverse && (nextT >= DEParams.tf))){
-            dt = DEParams.tf - DEParams.currentTime;
-            DEParams.finalStep = true;
-        }
-        return dt;
-
-    };
 
     /**
      * Calculates the next step in the solution of the Differential Equation using the Dormand-Prince method
@@ -787,6 +772,28 @@ var solver = (function () {
         } catch (e) {
             throw e;
         }
+    };
+
+    var getNextTimeStep = function(DEParams){
+        var exp = -1/5;
+        var dt = DEParams.dt;
+        var scaleFactor = Math.min(DEParams.maxGrowth, Math.max(DEParams.minReduction, DEParams.safetyFactor * Math.pow(DEParams.error, exp)));
+
+        dt = dt * scaleFactor;
+        if (Math.abs(dt) < DEParams.minStep) {
+            dt = DEParams.reverse ? -DEParams.minStep : DEParams.minStep;
+        }
+
+        if (Math.abs(dt) > DEParams.maxStep) {
+            dt = DEParams.reverse ? -DEParams.maxStep : DEParams.maxStep;
+        }
+        var nextT = DEParams.currentTime + dt;
+        if((DEParams.reverse && (nextT <= DEParams.tf)) || (!DEParams.reverse && (nextT >= DEParams.tf))){
+            dt = DEParams.tf - DEParams.currentTime;
+            DEParams.finalStep = true;
+        }
+        return dt;
+
     };
 
     //TODO: Verify this is working as expected. Initial results look right on inspection, but I did not check accuracy
