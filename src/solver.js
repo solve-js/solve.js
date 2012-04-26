@@ -50,7 +50,10 @@ var solver = (function () {
         params.finished = false;
         params.reverse = (t0 > tf);
         params.useDenseOutput = false;
+        params.calculateMidpoint = true;
         params.interpFuncs = new Array(0);
+        params.midpoints = [];
+        params.midT;
         params.inverseInterpFuncs = new Array(0);
         params.rkError = [];
         params.eventHandlers = [];
@@ -312,7 +315,7 @@ var solver = (function () {
 
 
 
-            DEParams.dense = false;
+            DEParams.dense = true;
             while (!DEParams.finished){
 
                 do{
@@ -328,8 +331,9 @@ var solver = (function () {
 
                 DEParams.previousTime = DEParams.currentTime;
                 DEParams.currentTime = DEParams.currentTime + DEParams.dt;
-                if(DEParams.dense){
+                if(DEParams.dense || DEParams.calculateMidpoint){
                     DEParams.interpFuncs = getInterpolatingFunctions(DEParams);
+                    //var tmp = getInverseInterpolatingFunctions(DEParams);
                     //generate 3 interpolated points: midpoint and an equidistant point on each side
                     //var midp = DEParams.previousTime + (DEParams.dt/2);
                     //var pt1 = DEParams.previousTime + ((midp - DEParams.previousTime)/2);
@@ -731,10 +735,14 @@ var solver = (function () {
 
             //m4[i] = y[i] + ((1 / 2) * ((C4[0] * Ki[0][i]) + (C4[2] * Ki[2][i]) + (C4[3] * Ki[3][i]) + (C4[4] * Ki[4][i]) + (C4[5] * Ki[5][i]) + (C4[6] * Ki[6][i])));
         }
-
+        DEParams.midT = tM;
         var f7 = DEFunc(tM, V);
         for(var i = 0; i < dim; ++i){
             midpoint[i] = W[i] + ((dt/2) * (C5[7] * f7[i]));
+            DEParams.midpoints[i] = midpoint[i];
+        }
+        if(DEParams.calculateMidpoint && !DEParams.dense){
+            return tM;
         }
 
 
