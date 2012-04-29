@@ -1,0 +1,43 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+        "http://www.w3.org/TR/html4/loose.dtd">
+
+<html>
+<script type="text/javascript" src="src/verifier.js"></script>
+<script type="text/javascript" src="src/solver.js"></script>
+<script type="text/javascript">
+    var solve = Object.create(solver);
+    var DE = {};
+    DE.simpleDE = {
+        func:function (t, y) {
+            var ydot = [];
+            ydot[0] = y[0];
+            return ydot;
+        },
+        y0:[1],
+        expectedValues:[
+            [2],
+            [4],
+            [8]
+        ],
+        stepSize:1
+    };
+    var func = DE.simpleDE.func;
+    var initialCond = DE.simpleDE.y0;
+    var startTime = 0;
+    var endTime = 2;
+    var stepSize = .1;
+    var clicked = function(){
+    var results = solve.modularSolver(func, initialCond, startTime,endTime, 0.001, 0.001, undefined);
+    //var otherRes = solve.solve(func, initialCond, startTime, endTime,.1, solve.dormandPrinceStep);
+    return true;
+    };
+
+</script>
+<head>
+    <title>Debugger</title>
+</head>
+<body>
+Debugging 'yo JavaScript...
+<button type="button" onclick="clicked()">Click</button>
+</body>
+</html>
