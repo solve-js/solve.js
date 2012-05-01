@@ -230,8 +230,6 @@ GeneralTest.prototype.testAnalyticSolution = function(){
      * Just an interim method of checking the results. Investigating other methods of comparing the error between the
      * numerical method and the analytical solution to determine correctness.
      */
-
-    //TODO: Calculate RMS error instead.
     var totalError = [0,0];
     numSoln.yVals[0].forEach(function(value, index, array){
         var errorSq1 = Math.pow(value - analSoln[0][index], 2);

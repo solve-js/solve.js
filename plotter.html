@@ -9,18 +9,18 @@
 <script type="text/javascript" src="src/solver.js"></script>
  <body>
     <h1>Mass Spring Damper</h1>
-
+	<p>Tolerance = 1 e-3, to show adaptive step size in action </p>
     <div id="placeholder" style="width:600px;height:300px"></div>
     <input type="text" id="mSDmass" size="20px" value="Enter mass M" class="formText" onblur="return doCheck('#mSDmass',event);">
     <input type="text" id="mSDk" size="20px" value="Enter spring constant K" class="formText" onblur="return doCheck('#mSDk',event);">
     <input type="text" id="mSDb" size="20px" value="Enter damping constant B" class="formText"  onblur="return doCheck('#mSDb',event);">
     <button type="button" onclick="clicked()">Plot</button>
 	
+	<p>Numeric Solution with Tolerance = 1 e-8(points), also plotted with the analytic solution(lines)</p>
+	<div id="placeholder2" style="width:600px;height:300px"></div>
+	
  	<h2>Hi-Res IVP</h2>
  	 <div id="placeholder1" style="width:600px;height:300px"></div>
-<!-- 	<input type="text" id="mSDmass1" size="20px" value="Enter mass M" class="formText" onblur="return doCheck('#mSDmass1',event);"> -->
-<!--     <input type="text" id="mSDk1" size="20px" value="Enter spring constant K" class="formText" onblur="return doCheck('#mSDk1',event);"> -->
-<!--     <input type="text" id="mSDb1" size="20px" value="Enter damping constant B" class="formText" onblur="return doCheck('#mSDb1',event);"> -->
     <button type="button" onclick="clicked1()">Plot</button>
     
 <script type="text/javascript">
@@ -168,7 +168,7 @@ function doCheck(id,evt)
     var stepSize = DE.analyticMassSpringDamper.stepSize;
     var clicked = function(){
     	
-    var results = solve.modularSolver(func, initialCond, startTime,endTime, 1e-8, 1e-8, undefined);
+    var results = solve.modularSolver(func, initialCond, startTime,endTime, 1e-3, 1e-3, undefined);
     //var otherRes = solve.solve(func, initialCond, startTime, endTime,.1, solve.dormandPrinceStep);
     var yVal = results.yVals;
     var tVal = results.tVals;
@@ -178,7 +178,7 @@ function doCheck(id,evt)
 	 for(var j = 0; j<yVal.length; j++){
 		 x[j] ={
 				 data:[],
-				 lines: {show:true}
+				 points: {show:true}
 		 };
    		 for(var i = 0; i< tVal.length; i++){
     		x[j].data.push([tVal[i],yVal[j][i]]);
@@ -186,7 +186,38 @@ function doCheck(id,evt)
     	}
    		
 	 }
+	 
     $.plot($("#placeholder"), x);
+	 });
+ 
+ var results1 = solve.modularSolver(func, initialCond, startTime,endTime, 1e-8, 1e-8, undefined);
+ var yVal1 = results1.yVals;
+ var tVal1 = results1.tVals;
+ var analyticSoln = DE.analyticMassSpringDamper.analyticSol(tVal1, [5,0]);
+ $(function(){   
+		var x = [];
+		
+	 for(var j = 0; j<yVal1.length; j++){
+		 x[j] ={
+				 data:[],
+				 points: {show:true}
+		 };
+		 for(var i = 0; i< tVal1.length; i++){
+ 		x[j].data.push([tVal1[i],yVal1[j][i]]);
+
+ 	}		
+	 }
+	 for(var k = 0; k<analyticSoln.length; k++){
+		 x[2 + k] ={
+				 data:[],
+				 lines: {show:true}
+		 };
+		 for(var i = 0; i< tVal1.length; i++){
+ 			x[2 + k].data.push([tVal1[i],analyticSoln[k][i]]);
+ 	}
+	 }
+	 
+ $.plot($("#placeholder2"), x);
 	 });
     };
  var clicked1 = function(){
@@ -212,7 +243,7 @@ function doCheck(id,evt)
 					 lines: {show:true},
 					 points: {show:true}
 			 };
-	   		 for(var i = 0; i< tVal.length; i++){
+	   		 for(var i = 0; i< tVal.length; i = i+1000){
 	    		x[j].data.push([tVal[i],yVal[j][i]]);
 
 	    	}
@@ -220,6 +251,7 @@ function doCheck(id,evt)
 	    $.plot($("#placeholder1"), x);
 		 });
     };
+    
 
 </script>
 </body>
