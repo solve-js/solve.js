@@ -1,0 +1,226 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+        "http://www.w3.org/TR/html4/loose.dtd">
+
+<html>
+<script language="javascript" type="text/javascript" src="src/flot-flot-1a99246/jquery.js"></script>
+<script language="javascript" type="text/javascript" src="src/flot-flot-1a99246/jquery.flot.js"></script>
+<script language="javascript" type="text/javascript" src="src/flot-flot-1a99246/jquery.flot.symbol.js"></script>
+<script type="text/javascript" src="src/verifier.js"></script>
+<script type="text/javascript" src="src/solver.js"></script>
+ <body>
+    <h1>Mass Spring Damper</h1>
+
+    <div id="placeholder" style="width:600px;height:300px"></div>
+    <input type="text" id="mSDmass" size="20px" value="Enter mass M" class="formText" onblur="return doCheck('#mSDmass',event);">
+    <input type="text" id="mSDk" size="20px" value="Enter spring constant K" class="formText" onblur="return doCheck('#mSDk',event);">
+    <input type="text" id="mSDb" size="20px" value="Enter damping constant B" class="formText"  onblur="return doCheck('#mSDb',event);">
+    <button type="button" onclick="clicked()">Plot</button>
+	
+ 	<h2>Hi-Res IVP</h2>
+ 	 <div id="placeholder1" style="width:600px;height:300px"></div>
+<!-- 	<input type="text" id="mSDmass1" size="20px" value="Enter mass M" class="formText" onblur="return doCheck('#mSDmass1',event);"> -->
+<!--     <input type="text" id="mSDk1" size="20px" value="Enter spring constant K" class="formText" onblur="return doCheck('#mSDk1',event);"> -->
+<!--     <input type="text" id="mSDb1" size="20px" value="Enter damping constant B" class="formText" onblur="return doCheck('#mSDb1',event);"> -->
+    <button type="button" onclick="clicked1()">Plot</button>
+    
+<script type="text/javascript">
+function doCheck(id,evt)
+{
+    var temp=parseFloat($(id).val());
+	
+    if (isNaN(temp))
+        temp='0.0';
+    if (temp==0)
+        temp='0.0';
+
+    $(id).val(temp);
+}
+
+    var solve = Object.create(solver);
+    var DE = {};
+    DE.simpleDE = {
+        func:function (t, y) {
+            var ydot = [];
+            ydot[0] = y[0];
+            return ydot;
+        },
+        y0:[1],
+        expectedValues:[
+            [2],
+            [4],
+            [8]
+        ],
+        stepSize:1
+    };
+    DE.analyticMassSpringDamper = {
+    		
+            m: $('#mSDmass').val(),
+            k: $('#mSDk').val(),
+            b: $('#mSDb').val(),
+            startTime: 0,
+            endTime: 25,
+            stepSize: 0.1,
+            y0: [5, 0],
+            func: function (t, y){
+                var b = $('#mSDb').val();
+                var k = $('#mSDk').val();
+                var m = $('#mSDmass').val();
+                var wn = (Math.sqrt(k/m));
+                var zeta = (0.5*b/Math.sqrt(k*m));
+                var ydot = [];
+
+                ydot[0] = y[1];
+                ydot[1] = -wn * (wn * y[0] + 2 * zeta * y[1]);
+                return ydot;
+            },
+            analyticSol: function(tvals, y0){
+            	var b = $('#mSDb').val();
+                var k = $('#mSDk').val();
+                var m = $('#mSDmass').val();
+                var wn = (Math.sqrt(k/m));
+                var zeta = (0.5*b/Math.sqrt(k*m));
+                var timespan = tvals;
+                var solution = [[],[]];
+                Verify.value(zeta, "zeta").always().isNumber().greaterThanOrEqualTo(0);
+
+                if(zeta < 1){ //Underdamped case
+                    var s = -wn*zeta;
+                    var wd = Math.sqrt(1-Math.pow(zeta,2))*wn;
+                    var A = y0[0];
+                    var B = (y0[1]-s*y0[0])/wd;
+
+                    timespan.forEach(function(value, index, array){
+                        var t = value;
+                        var Y1 = Math.exp(s*t)*(A*Math.cos(wd*t)+B*Math.sin(wd*t));
+                        var Y2 = Math.exp(s*t)*((A*s+B*wd)*Math.cos(wd*t)+(B*s-A*wd)*Math.sin(wd*t));
+                        solution[0].push(Y1);
+                        solution[1].push(Y2);
+                    });
+                    return solution;
+                } else if(zeta === 1){ //Critical damping
+                    var A = y0[0];
+                    var B = wn*y0[0]+y0[1];
+
+                    timespan.forEach(function(value, index, array){
+                        var t = value;
+                        var Y1 = (A+B*t)*Math.exp(-wn*t);
+                        var Y2 = (B-A*wn-B*wn*t)*Math.exp(-wn*t);
+                        solution[0].push(Y1);
+                        solution[1].push(Y2);
+                    });
+                    return solution;
+                } else { //Overdamped
+                    var del = wn*Math.sqrt(Math.pow(zeta,2)-1);
+                    var s1 = -wn*zeta+del;
+                    var s2 = -wn*zeta-del;
+
+                    var A = 0.5*(y0[1]-s2*y0[0])/del;
+                    var B = 0.5*(s1*y0[0]-y0[1])/del;
+
+                    timespan.forEach(function(value, index, array){
+                        var t = value;
+                        var Y1 = A*Math.exp(s1*t)+B*Math.exp(s2*t);
+                        var Y2 = A*s1*Math.exp(s1*t)+B*s2*Math.exp(s2*t);
+                        solution[0].push(Y1);
+                        solution[1].push(Y2);
+                    });
+                    return solution;
+                }
+            }
+        };
+   	DE.hiresIVP = {
+            /*
+             Taken from the set of IVP test problems found at: http://www.dm.uniba.it/~testset/testsetivpsolvers/?page_id=26
+             HIRES Description and Solutions: http://www.dm.uniba.it/~testset/report/hires.pdf
+             */
+            func:function (t, y) {
+                var ydot = [];
+                ydot[0] = -1.71 * y[0] + 0.43 * y[1] + 8.32 * y[2] + 0.0007;
+                ydot[1] = 1.71 * y[0] - 8.75 * y[1];
+                ydot[2] = -10.03 * y[2] + 0.43 * y[3] + 0.035 * y[4];
+                ydot[3] = 8.32 * y[1] + 1.71 * y[2] - 1.12 * y[3];
+                ydot[4] = -1.745 * y[4] + 0.43 * (y[5] + y[6]);
+                ydot[5] = -280 * y[5] * y[7] + 0.69 * y[3] + 1.71 * y[4] - 0.43 * y[5] + 0.69 * y[6];
+                ydot[6] = 280 * y[5] * y[7] - 1.81 * y[6];
+                ydot[7] = -ydot[6];
+
+                return ydot;
+            },
+            y0:[1, 0, 0, 0, 0, 0, 0, 0.0057],
+            t0:0,
+            tf:321.8122,
+            expectedValues:[0.7371312573325668e-3,
+                0.1442485726316185e-3,
+                0.5888729740967575e-4,
+                0.1175651343283149e-2,
+                0.2386356198831331e-2,
+                0.6238968252742796e-2,
+                0.2849998395185769e-2,
+                0.2850001604814231e-2],
+            rtol:1.1e-18,
+            atol:1.1e-18,
+            dt0:1e-8
+        };
+    var func = DE.analyticMassSpringDamper.func;
+    var initialCond = DE.analyticMassSpringDamper.y0;
+    var startTime = DE.analyticMassSpringDamper.startTime;
+    var endTime = DE.analyticMassSpringDamper.endTime;
+    var stepSize = DE.analyticMassSpringDamper.stepSize;
+    var clicked = function(){
+    	
+    var results = solve.modularSolver(func, initialCond, startTime,endTime, 1e-8, 1e-8, undefined);
+    //var otherRes = solve.solve(func, initialCond, startTime, endTime,.1, solve.dormandPrinceStep);
+    var yVal = results.yVals;
+    var tVal = results.tVals;
+ $(function(){   
+		var x = [];
+		
+	 for(var j = 0; j<yVal.length; j++){
+		 x[j] ={
+				 data:[],
+				 lines: {show:true}
+		 };
+   		 for(var i = 0; i< tVal.length; i++){
+    		x[j].data.push([tVal[i],yVal[j][i]]);
+
+    	}
+   		
+	 }
+    $.plot($("#placeholder"), x);
+	 });
+    };
+ var clicked1 = function(){
+	    var func = DE.hiresIVP.func;
+	    var initCond = DE.hiresIVP.y0;
+	    var start = 0;
+	    var end = DE.hiresIVP.tf;
+	    var rtol = DE.hiresIVP.rtol;
+	    var atol = DE.hiresIVP.atol;
+	    var initialStep = DE.hiresIVP.dt0;
+	    var expected = DE.hiresIVP.expectedValues;
+
+	    var numSoln = solve.modularSolver(func, initCond, start, end, atol, rtol, undefined, initialStep);
+	    //var otherRes = solve.solve(func, initialCond, startTime, endTime,.1, solve.dormandPrinceStep);
+	    var yVal = numSoln.yVals;
+	    var tVal = numSoln.tVals;
+	 $(function(){   
+			var x = [];
+			
+		 for(var j = 0; j<yVal.length; j++){
+			 x[j] ={
+					 data:[],
+					 lines: {show:true},
+					 points: {show:true}
+			 };
+	   		 for(var i = 0; i< tVal.length; i++){
+	    		x[j].data.push([tVal[i],yVal[j][i]]);
+
+	    	}
+		 }
+	    $.plot($("#placeholder1"), x);
+		 });
+    };
+
+</script>
+</body>
+</html>
