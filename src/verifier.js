@@ -15,8 +15,11 @@
  *
  * Licensed under the MIT license, which can be found at the link below.
  * http://jstest.codeplex.com/license
+ *
+*/
+/**
+ *This file contains the functions to verify inputs before they are passed through the solver.
  */
-
 var Verify = (function () {
     function hasValue(value) {
         return typeof (value) !== "undefined" && value !== null;

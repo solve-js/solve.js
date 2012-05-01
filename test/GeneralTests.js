@@ -17,6 +17,7 @@ GeneralTest = TestCase("GeneralTest");
  */
 GeneralTest.prototype.setUp = function () {
     this.solve = Object.create(solver);
+    // simple 1 dimensional differential equation
     this.simpleDE = {
         func:function (t, y) {
             var ydot = [];
@@ -31,6 +32,7 @@ GeneralTest.prototype.setUp = function () {
         ],
         stepSize:1
     };
+    //simple 3-dimensional rigid body system
     this.rigidBody3D = {
         func:function (t, y) {
             var ydot = [];
@@ -44,6 +46,7 @@ GeneralTest.prototype.setUp = function () {
         startTime:0,
         endTime:12
     };
+    //typical mass spring damper system
     this.analyticMassSpringDamper = {
         m: 10,
         k: 8,
@@ -52,6 +55,7 @@ GeneralTest.prototype.setUp = function () {
         endTime: 25,
         stepSize: 0.1,
         y0: [5, 0],
+        //function to be passed through solver.js
         func: function (t, y){
             var b = 6
             var k = 8;
@@ -64,6 +68,7 @@ GeneralTest.prototype.setUp = function () {
             ydot[1] = -wn * (wn * y[0] + 2 * zeta * y[1]);
             return ydot;
         },
+        //analytic solution 
         analyticSol: function(tvals, y0){
             var b = 6;
             var k = 8;
@@ -145,7 +150,7 @@ GeneralTest.prototype.testInitialStep = function () {
         y0 = result;
     }
 };
-
+//actual test to see if solver returns correct values.  prints to console
 GeneralTest.prototype.testSolverFunction = function () {
     var s = this.solve;
     var func = this.simpleDE.func;
@@ -170,6 +175,7 @@ GeneralTest.prototype.testSolverFunction = function () {
  * y0 = [0, 1, 1]
  * dt = 0.01
  */
+
 GeneralTest.prototype.testSystemOfDifferentialEquations = function () {
     var s = this.solve;
     var func = this.rigidBody3D.func;
@@ -205,7 +211,7 @@ GeneralTest.prototype.testInvalidStepResults = function () {
         return s.eulerStep(validDE, 0, [1], 1);
     });
 };
-
+//does the numeric solution match the analytic solution?
 GeneralTest.prototype.testAnalyticSolution = function(){
     var s = this.solve;
     var testDE = this.analyticMassSpringDamper.func;

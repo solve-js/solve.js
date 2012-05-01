@@ -163,6 +163,7 @@ CorrectnessTest.prototype.setUp = function () {
     };
 };
 
+//passes the DE through solver, then prints the result
 CorrectnessTest.prototype.testHiresIVP = function(){
     var s = this.solve;
     var testDE = this.hiresIVP.func;
@@ -184,6 +185,7 @@ CorrectnessTest.prototype.testHiresIVP = function(){
 
 };
 
+//passes the DE through solver, then prints the result
 CorrectnessTest.prototype.testPollutionIVP = function(){
     var s = this.solve;
     var testDE = this.pollutionIVP.func;
