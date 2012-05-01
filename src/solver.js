@@ -97,7 +97,7 @@ var solver = (function () {
         }
     };
 
-    s.modularSolver = function (deFunction, initialConditions, startTime, endTime, absoluteTolerance, relativeTolerance, integrationMethod, initialStep) {
+    s.modularSolver = function (deFunction, initialConditions, startTime, endTime, absoluteTolerance, relativeTolerance, integrationMethod, initialStep, generateInterpolants) {
         "use strict"
         try {
             Verify.value(deFunction, "deFunction").always().isFunction();
@@ -113,11 +113,9 @@ var solver = (function () {
                     []
                 ],
                 tVals:[],
-                yValsDense:[
-                    []
-                ],
-                tValsDense:[],
-                interpFuncs:[]
+                interpFuncs:[],
+                interpTimes:[],
+                zeros: [[]]
             };
 
             var DEParams = EquationParameters(deFunction, startTime, endTime, initialConditions, absoluteTolerance, relativeTolerance);
@@ -141,7 +139,7 @@ var solver = (function () {
 
 
 
-            DEParams.dense = true;
+            DEParams.dense = generateInterpolants || false;
             while (!DEParams.finished){
 
                 do{
@@ -158,7 +156,8 @@ var solver = (function () {
                 DEParams.previousTime = DEParams.currentTime;
                 DEParams.currentTime = DEParams.currentTime + DEParams.dt;
                 if(DEParams.dense || DEParams.calculateMidpoint){
-                    DEParams.interpFuncs = getInterpolatingFunctions(DEParams);
+                    DEParams.interpFuncs.push(getInterpolatingFunctions(DEParams));
+                    DEParams.interpTime.push([DEParams.previousTime, DEParams.currentTime]);
                     //var tmp = getInverseInterpolatingFunctions(DEParams);
                     //generate 3 interpolated points: midpoint and an equidistant point on each side
                     //var midp = DEParams.previousTime + (DEParams.dt/2);
@@ -173,7 +172,10 @@ var solver = (function () {
                     //time.push(pt1);
                     //time.push(midp);
                     //time.push(pt2);
+
+                    var zeros = findZeros(DEParams, vals);
                 }
+
                 for (var i = 0; i < dims; ++i) {
                     vals[i].push(DEParams.state[i]);
                     //DEParams.yDotStart[i] = DEParams.yDotEnd[i];
@@ -187,14 +189,16 @@ var solver = (function () {
                 DEParams.dt = calculateNextTimeStep(DEParams);
 
 
-                //handle events...
-                //maybe some interpolation...
+
 
             }
 
 
             results.yVals = vals;
             results.tVals = time;
+            results.interpFuncs = DEParams.interpFuncs;
+            results.interpTimes = DEParams.interpTime;
+            results.zeros = DEParams.zeros;
             return results;
         }
         catch (e) {
@@ -202,6 +206,42 @@ var solver = (function () {
             throw e;
         }
     };
+
+    var findZeros = function(DEParams, vals){
+
+        var dim = DEParams.state.length;
+        var interpFun = DEParams.interpFuncs[DEParams.interpFuncs.length - 1];
+        var times = DEParams.zeros;
+
+        for(var i = 0; i < dim; ++i){
+            if(!Array.isArray(times[i])){
+                times[i] = new Array(0);
+            }
+
+            var start = vals[i][vals[i].length - 1];
+            var end = DEParams.state[i];
+            if((start > 0 && end < 0) || (start < 0 && end > 0)){
+                var fn = interpFun[i];
+                //start looking at the midpoint
+                var t = (DEParams.currentTime + DEParams.previousTime) / 2;
+                var point = fn(t);
+                var iter = 0;
+                while(Math.abs(point) > 1e-3 && iter < 1000){
+                    if((point > 0 && start > 0)){
+                        t = (t + DEParams.currentTime)/2;
+                    } else {
+                        t = (t + DEParams.previousTime)/2;
+                    }
+                    point = fn(t);
+                    iter++;
+                }
+
+                times[i].push(t);
+
+            }
+        }
+        return times;
+    }
 
     /**
      * @function
@@ -271,7 +311,9 @@ var solver = (function () {
         params.useDenseOutput = false;
         params.calculateMidpoint = true;
         params.interpFuncs = new Array(0);
+        params.interpTime = new Array(0);
         params.midpoints = [];
+        params.zeros = [];
         params.midT;
         params.inverseInterpFuncs = new Array(0);
         params.rkError = [];
@@ -446,6 +488,9 @@ var solver = (function () {
                 yDotStart = ydot(t, y);
                 firstStep = false;
             }
+        for(var i = 0; i < dims; ++i){
+            DEParams.previousState[i] = y[i];
+        }
 
 
         yDotStart.forEach(function (v, i, a) {
@@ -477,7 +522,7 @@ var solver = (function () {
 
 
         for(var dim = 0; dim < dims; ++dim){
-            DEParams.previousState[dim] = y[dim];
+           // DEParams.previousState[dim] = y[dim];
             DEParams.state[dim] = solution[dim];
             DEParams.rkError[dim] = (solution[dim] - solutionForErrorEstimation[dim]);
         }
@@ -621,7 +666,9 @@ var solver = (function () {
         var dt = DEParams.dt;
         var scaleFactor = Math.min(DEParams.maxGrowth, Math.max(DEParams.minReduction, DEParams.safetyFactor * Math.pow(error, exp)));
 
-        dt = dt * scaleFactor;
+
+        //Half the step size for a failed step. The auto-scaling sometime acts funny and grows the step instead of shrinking it
+        dt = dt * 0.5;
         if (Math.abs(dt) < DEParams.minStep) {
             dt = DEParams.reverse ? -DEParams.minStep : DEParams.minStep;
         }
