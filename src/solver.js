@@ -12,180 +12,6 @@
 
 var solver = (function () {
     var s = {};
-
-
-    var EquationParameters = function (deFunc, t0, tf, initialCond, absTolerance, relTolerance) {
-        var params = Object.create(EquationParameters.prototype);
-        params.ydot = deFunc;
-        params.t0 = t0;
-        params.tf = tf;
-        params.y0 = initialCond;
-
-        params.dt0 = 0;
-        params.dt = 0;
-        params.Ki = [
-            []
-        ];
-        params.dims = initialCond.length;
-        params.atol = absTolerance || 1e-8; //TODO: Find better/realistic defaults for these tolerances
-        params.rtol = relTolerance || 1e-8;
-
-        /*
-         * Safety Factor, Max Growth Rate, and Min Shrink Rate all taken from Apache Commons Math
-         */
-        params.safetyFactor = 0.9;
-        params.minReduction = 0.2;
-        params.maxGrowth = 5;
-
-        params.minStep = 0;
-        params.maxStep = Math.abs(params.tf - params.t0);
-        params.state = [];
-        params.previousState = [];
-        params.yDotStart = [];
-        params.yDotEnd = [];
-        params.currentTime = t0;
-        params.previousTime = 0;
-        params.firstStep = true;
-        params.finalStep = false;
-        params.finished = false;
-        params.reverse = (t0 > tf);
-        params.useDenseOutput = false;
-        params.calculateMidpoint = true;
-        params.interpFuncs = new Array(0);
-        params.midpoints = [];
-        params.midT;
-        params.inverseInterpFuncs = new Array(0);
-        params.rkError = [];
-        params.eventHandlers = [];
-        return params;
-    };
-
-    var IntegratorParameters = function (A_coefficients, B_coefficients, C_coefficients, interpolationFunc, firstSameAsLast) {
-        var params = Object.create(IntegratorParameters.prototype);
-
-        params.A = A_coefficients;
-        params.B = B_coefficients;
-        params.BError;
-        params.C = C_coefficients;
-        params.stages = C_coefficients.length + 1;
-        params.interpolate = interpolationFunc;
-        params.firstSameAsLast = firstSameAsLast || false;
-        return params;
-    };
-
-    var InterpolationParameters = function () {
-        var params = Object.create(InterpolationParameters.prototype);
-        return params;
-    };
-
-    //Parameters needed for dense output/interpolation when using Dormand-Prince
-    /**
-     *
-     * @type {InterpolationParameters}
-     */
-    s.DormandPrinceInterpolator = (function () {
-        var params = InterpolationParameters();
-        /*
-         // Last row of the Butcher-array internal weights, elements 0-5.
-         params.A70 =    35.0 /  384.0;
-         // element 1 is zero, so it is neither stored nor used
-         params.A72 =   500.0 / 1113.0;
-         params.A73 =   125.0 /  192.0;
-         params.A74 = -2187.0 / 6784.0;
-         params.A75 =    11.0 /   84.0;
-
-         // Shampine (1986) Dense output, elements 0-6.
-         params.D0 =  -12715105075.0 /  11282082432.0;
-         // element 1 is zero
-         params.D2 =   87487479700.0 /  32700410799.0;
-         params.D3 =  -10690763975.0 /   1880347072.0;
-         params.D4 =  701980252875.0 / 199316789632.0;
-         params.D5 =   -1453857185.0 /    822651844.0;
-         params.D6 =      69997945.0 /     29380423.0;
-         */
-        //Interpolation State Vectors
-        params.V1 = [];
-        params.V2 = [];
-        params.V3 = [];
-        params.V4 = [];
-
-        params.initialized = false;
-
-        params.initialize = function (Ki) {
-            if (!params.initialized) {
-                var dim = Ki[0].length;
-                var k0, k2, k3, k4, k5, k6;
-                var V1 = params.V1;
-                var V2 = params.V2;
-                var V3 = params.V3;
-                var V4 = params.V4;
-
-                /* Last row of the Butcher-array internal weights, elements 0-5. */
-                var A70 = 35.0 / 384.0;
-                // element 1 is zero, so it is neither stored nor used
-                var A72 = 500.0 / 1113.0;
-                var A73 = 125.0 / 192.0;
-                var A74 = -2187.0 / 6784.0;
-                var A75 = 11.0 / 84.0;
-
-                /* Shampine (1986) Dense output, elements 0-6. */
-                var D0 = -12715105075.0 / 11282082432.0;
-                // element 1 is zero
-                var D2 = 87487479700.0 / 32700410799.0;
-                var D3 = -10690763975.0 / 1880347072.0;
-                var D4 = 701980252875.0 / 199316789632.0;
-                var D5 = -1453857185.0 / 822651844.0;
-                var D6 = 69997945.0 / 29380423.0;
-
-                for (var i = 0; i < dim; ++i) {
-                    k0 = Ki[0][i];
-                    k2 = Ki[2][i];
-                    k3 = Ki[3][i];
-                    k4 = Ki[4][i];
-                    k5 = Ki[5][i];
-                    k6 = Ki[6][i];
-
-                    V1[i] = A70 * k0 + A72 * k2 + A73 * k3 + A74 * k4 + A75 * k5;
-                    V2[i] = k0 - V1[i];
-                    V3[i] = V1[i] - V2[i] - k6;
-                    V4[i] = D0 * k0 + D2 * k2 + D3 * k3 + D4 * k4 + D5 * k5 + D6 * k6;
-                }
-                params.initialized = true;
-            }
-        };
-        return params;
-    })();
-
-    //Provides the coefficients for Dormand-Prince integration
-    /**
-     *
-     * @type {IntegratorParameters}
-     * @description Holds an object containing the parameters needed for the integrator to integrate using the Dormand-Prince method
-     */
-    s.DormandPrince45Integrator = (function () {
-        //Coefficients for  RK45/Dormand-Prince integration
-        var A = [
-            [1.0 / 5.0],
-            [3.0 / 40.0, 9.0 / 40.0],
-            [44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0],
-            [19372.0 / 6561.0, -25360.0 / 2187.0, 64448.0 / 6561.0, -212.0 / 729.0],
-            [9017.0 / 3168.0, -355.0 / 33.0, 46732.0 / 5247.0, 49.0 / 176.0, -5103.0 / 18656.0],
-            [35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0, -2187.0 / 6784.0, 11.0 / 84.0]
-        ];
-
-        var B = [35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0, -2187.0 / 6784.0, 11.0 / 84.0, 0.0];
-        var BError = [5179 / 57600, 0, 7571 / 16695, 393 / 640, -92097 / 339200, 187 / 2100, 1 / 40];
-
-
-        var C = [1.0 / 5.0, 3.0 / 10.0, 4.0 / 5.0, 8.0 / 9.0, 1.0, 1.0];
-
-        var DPparams = IntegratorParameters(A, B, C);
-        DPparams.BError = BError;
-        DPparams.order = 5;
-        DPparams.firstSameAsLast = true;
-        return DPparams;
-    })();
-
     /**
      * @function
      * @param {Function} deFunction The function representing the Differential Equation to be solved
@@ -406,11 +232,185 @@ var solver = (function () {
         }
     };
 
+    //place holder for parameters during solving, can be used for customization
+    var EquationParameters = function (deFunc, t0, tf, initialCond, absTolerance, relTolerance) {
+        var params = Object.create(EquationParameters.prototype);
+        params.ydot = deFunc;
+        params.t0 = t0;
+        params.tf = tf;
+        params.y0 = initialCond;
+
+        params.dt0 = 0;
+        params.dt = 0;
+        params.Ki = [
+            []
+        ];
+        params.dims = initialCond.length;
+        params.atol = absTolerance || 1e-8; //TODO: Find better/realistic defaults for these tolerances
+        params.rtol = relTolerance || 1e-8;
+
+        /*
+         * Safety Factor, Max Growth Rate, and Min Shrink Rate all taken from Apache Commons Math
+         */
+        params.safetyFactor = 0.9;
+        params.minReduction = 0.2;
+        params.maxGrowth = 5;
+
+        params.minStep = 0;
+        params.maxStep = Math.abs(params.tf - params.t0);
+        params.state = [];
+        params.previousState = [];
+        params.yDotStart = [];
+        params.yDotEnd = [];
+        params.currentTime = t0;
+        params.previousTime = 0;
+        params.firstStep = true;
+        params.finalStep = false;
+        params.finished = false;
+        params.reverse = (t0 > tf);
+        params.useDenseOutput = false;
+        params.calculateMidpoint = true;
+        params.interpFuncs = new Array(0);
+        params.midpoints = [];
+        params.midT;
+        params.inverseInterpFuncs = new Array(0);
+        params.rkError = [];
+        params.eventHandlers = [];
+        return params;
+    };
+
+    var IntegratorParameters = function (A_coefficients, B_coefficients, C_coefficients, interpolationFunc, firstSameAsLast) {
+        var params = Object.create(IntegratorParameters.prototype);
+
+        params.A = A_coefficients;
+        params.B = B_coefficients;
+        params.BError;
+        params.C = C_coefficients;
+        params.stages = C_coefficients.length + 1;
+        params.interpolate = interpolationFunc;
+        params.firstSameAsLast = firstSameAsLast || false;
+        return params;
+    };
+
+    var InterpolationParameters = function () {
+        var params = Object.create(InterpolationParameters.prototype);
+        return params;
+    };
+
+    //Parameters needed for dense output/interpolation when using Dormand-Prince
+    /**
+     *
+     * @type {InterpolationParameters}
+     */
+    s.DormandPrinceInterpolator = (function () {
+        var params = InterpolationParameters();
+        /*
+         // Last row of the Butcher-array internal weights, elements 0-5.
+         params.A70 =    35.0 /  384.0;
+         // element 1 is zero, so it is neither stored nor used
+         params.A72 =   500.0 / 1113.0;
+         params.A73 =   125.0 /  192.0;
+         params.A74 = -2187.0 / 6784.0;
+         params.A75 =    11.0 /   84.0;
+
+         // Shampine (1986) Dense output, elements 0-6.
+         params.D0 =  -12715105075.0 /  11282082432.0;
+         // element 1 is zero
+         params.D2 =   87487479700.0 /  32700410799.0;
+         params.D3 =  -10690763975.0 /   1880347072.0;
+         params.D4 =  701980252875.0 / 199316789632.0;
+         params.D5 =   -1453857185.0 /    822651844.0;
+         params.D6 =      69997945.0 /     29380423.0;
+         */
+        //Interpolation State Vectors
+        params.V1 = [];
+        params.V2 = [];
+        params.V3 = [];
+        params.V4 = [];
+
+        params.initialized = false;
+
+        params.initialize = function (Ki) {
+            if (!params.initialized) {
+                var dim = Ki[0].length;
+                var k0, k2, k3, k4, k5, k6;
+                var V1 = params.V1;
+                var V2 = params.V2;
+                var V3 = params.V3;
+                var V4 = params.V4;
+
+                /* Last row of the Butcher-array internal weights, elements 0-5. */
+                var A70 = 35.0 / 384.0;
+                // element 1 is zero, so it is neither stored nor used
+                var A72 = 500.0 / 1113.0;
+                var A73 = 125.0 / 192.0;
+                var A74 = -2187.0 / 6784.0;
+                var A75 = 11.0 / 84.0;
+
+                /* Shampine (1986) Dense output, elements 0-6. */
+                var D0 = -12715105075.0 / 11282082432.0;
+                // element 1 is zero
+                var D2 = 87487479700.0 / 32700410799.0;
+                var D3 = -10690763975.0 / 1880347072.0;
+                var D4 = 701980252875.0 / 199316789632.0;
+                var D5 = -1453857185.0 / 822651844.0;
+                var D6 = 69997945.0 / 29380423.0;
+
+                for (var i = 0; i < dim; ++i) {
+                    k0 = Ki[0][i];
+                    k2 = Ki[2][i];
+                    k3 = Ki[3][i];
+                    k4 = Ki[4][i];
+                    k5 = Ki[5][i];
+                    k6 = Ki[6][i];
+
+                    V1[i] = A70 * k0 + A72 * k2 + A73 * k3 + A74 * k4 + A75 * k5;
+                    V2[i] = k0 - V1[i];
+                    V3[i] = V1[i] - V2[i] - k6;
+                    V4[i] = D0 * k0 + D2 * k2 + D3 * k3 + D4 * k4 + D5 * k5 + D6 * k6;
+                }
+                params.initialized = true;
+            }
+        };
+        return params;
+    })();
+
+    //Provides the coefficients for Dormand-Prince integration
+    /**
+     *
+     * @type {IntegratorParameters}
+     * @description Holds an object containing the parameters needed for the integrator to integrate using the Dormand-Prince method
+     */
+    s.DormandPrince45Integrator = (function () {
+        //Coefficients for  RK45/Dormand-Prince integration
+        var A = [
+            [1.0 / 5.0],
+            [3.0 / 40.0, 9.0 / 40.0],
+            [44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0],
+            [19372.0 / 6561.0, -25360.0 / 2187.0, 64448.0 / 6561.0, -212.0 / 729.0],
+            [9017.0 / 3168.0, -355.0 / 33.0, 46732.0 / 5247.0, 49.0 / 176.0, -5103.0 / 18656.0],
+            [35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0, -2187.0 / 6784.0, 11.0 / 84.0]
+        ];
+
+        var B = [35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0, -2187.0 / 6784.0, 11.0 / 84.0, 0.0];
+        var BError = [5179 / 57600, 0, 7571 / 16695, 393 / 640, -92097 / 339200, 187 / 2100, 1 / 40];
 
 
+        var C = [1.0 / 5.0, 3.0 / 10.0, 4.0 / 5.0, 8.0 / 9.0, 1.0, 1.0];
 
+        var DPparams = IntegratorParameters(A, B, C);
+        DPparams.BError = BError;
+        DPparams.order = 5;
+        DPparams.firstSameAsLast = true;
+        return DPparams;
+    })();
 
-
+    /**
+    *
+    * @type {IntegratorParameters}
+    * @description Holds an object containing the parameters needed for the integrator to integrate using any Runge-Kutta method
+    * can be customized to use any Runge-Kutta method
+    */
     var RKIntegrator = function (DEParams, IntegratorParams) {
         "use strict"
         Verify.value(DEParams, "DEParams").always().isPrototypeOf(EquationParameters);
@@ -642,9 +642,6 @@ var solver = (function () {
 
     };
 
-
-
-
     /**
      * Calculates the optimum size of the next step based on the error calculated for the current step. If a multi-dimensional
      * system is being solved, it returns the smallest optimal time value.
@@ -654,7 +651,7 @@ var solver = (function () {
      * @return {Number} Returns the calculated optimal next time step
      */
     //TODO: Adapt to work with current integration methods. I think that this method will give more control to the user supplied tolerances than the other algorithm
-    var calculateNextTimeStep2 = function (dtCurrent, calcError, tolerance) {
+    var calculateNextTimeStepOptimal = function (dtCurrent, calcError, tolerance) {
         "use strict"
         try {
             Verify.value(dtCurrent, "dtCurrent").always().isNumber().isFinite();
@@ -815,7 +812,7 @@ var solver = (function () {
         }
         return interpTable;
     };
-
+    
     var getInverseInterpolatingFunctions = function (DEParams){
         "use strict"
         var dt = DEParams.dt;
