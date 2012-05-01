@@ -1,6 +1,11 @@
-description of what it does
+Description of what it does:
 
-how to use
+Solve.js is intended to be a library to aid in the solution of Ordinary Differential Equations.  In the Solver.js, .modularSolve
+is the general numeric solver using the Dormand Prince, Runge-Kutta method.  A different integration method can also be used 
+via the integratorMethod input.  
 
-where to plot
+There are test cases to play with in GeneralTests and CorrectnessTests, just run the files and the unit tests will run also.
+Verifiers for inputs are also included in verifier.js, to make sure certain inputs are not NaN or are within bounds.
 
+A plotter, titles plotter.html, is also included for demonstration purposes. It uses Flot, an open source jQuery software,
+also included.  It has an API and FAQs in the src/flot folder.
