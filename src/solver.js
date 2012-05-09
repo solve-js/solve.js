@@ -97,7 +97,7 @@ var solver = (function () {
         }
     };
 
-    s.modularSolver = function (deFunction, initialConditions, startTime, endTime, absoluteTolerance, relativeTolerance, integrationMethod, initialStep) {
+    s.modularSolver = function (deFunction, initialConditions, startTime, endTime, absoluteTolerance, relativeTolerance, integrationMethod, initialStep, interp) {
         "use strict"
         try {
             Verify.value(deFunction, "deFunction").always().isFunction();
@@ -141,7 +141,8 @@ var solver = (function () {
 
 
 
-            DEParams.dense = true;
+            DEParams.dense = interp || false;
+            var zeros = false;
             while (!DEParams.finished){
 
                 do{
@@ -149,7 +150,7 @@ var solver = (function () {
                 DEParams.error = estimateError(DEParams);
                 //If the error is too big, reset the step and try again.
                 if(DEParams.error >= 1.0){
-                    DEParams = resetStep(DEParams);
+                   // DEParams = resetStep(DEParams);
                 }
                 } while(DEParams.error >= 1.0);
 
@@ -158,7 +159,8 @@ var solver = (function () {
                 DEParams.previousTime = DEParams.currentTime;
                 DEParams.currentTime = DEParams.currentTime + DEParams.dt;
                 if(DEParams.dense || DEParams.calculateMidpoint){
-                    DEParams.interpFuncs = getInterpolatingFunctions(DEParams);
+                    DEParams.interpFuncs.push(getInterpolatingFunctions(DEParams));
+                    DEParams.interpTimes.push([DEParams.previousTime, DEParams.currentTime]);
                     //var tmp = getInverseInterpolatingFunctions(DEParams);
                     //generate 3 interpolated points: midpoint and an equidistant point on each side
                     //var midp = DEParams.previousTime + (DEParams.dt/2);
@@ -173,6 +175,9 @@ var solver = (function () {
                     //time.push(pt1);
                     //time.push(midp);
                     //time.push(pt2);
+                    if(findZeros){
+                       // var zeros = findZeros(DEParams);
+                    }
                 }
                 for (var i = 0; i < dims; ++i) {
                     vals[i].push(DEParams.state[i]);
@@ -195,12 +200,50 @@ var solver = (function () {
 
             results.yVals = vals;
             results.tVals = time;
+            results.interpFuncs = DEParams.interpFuncs;
+            results.interpTimes = DEParams.interpTimes;
             return results;
         }
         catch (e) {
             console.log(e);
             throw e;
         }
+    };
+
+    var findZeros = function(DEParams, vals){
+
+        var dim = DEParams.state.length;
+        var interpFun = DEParams.interpFuncs[DEParams.interpFuncs.length - 1];
+        var times = DEParams.zeros;
+
+        for(var i = 0; i < dim; ++i){
+            if(!Array.isArray(times[i])){
+                times[i] = new Array(0);
+            }
+
+            var start = vals[i][vals[i].length - 1];
+            var end = DEParams.state[i];
+            if((start > 0 && end < 0) || (start < 0 && end > 0)){
+                var fn = interpFun[i];
+                //start looking at the midpoint
+                var t = (DEParams.currentTime + DEParams.previousTime) / 2;
+                var point = fn(t);
+                var iter = 0;
+                while(Math.abs(point) > 1e-3 && iter < 1000){
+                    if((point > 0 && start > 0)){
+                        t = (t + DEParams.currentTime)/2;
+                    } else {
+                        t = (t + DEParams.previousTime)/2;
+                    }
+                    point = fn(t);
+                    iter++;
+                }
+
+                times[i].push(t);
+
+            }
+        }
+        return times;
     };
 
     /**
@@ -271,6 +314,7 @@ var solver = (function () {
         params.useDenseOutput = false;
         params.calculateMidpoint = true;
         params.interpFuncs = new Array(0);
+        params.interpTimes = new Array(0);
         params.midpoints = [];
         params.midT;
         params.inverseInterpFuncs = new Array(0);
@@ -738,9 +782,7 @@ var solver = (function () {
             midpoint[i] = W[i] + ((dt/2) * (C5[7] * f7[i]));
             DEParams.midpoints[i] = midpoint[i];
         }
-        if(DEParams.calculateMidpoint && !DEParams.dense){
-            return tM;
-        }
+
 
 
 

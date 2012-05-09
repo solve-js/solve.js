@@ -168,10 +168,12 @@ function doCheck(id,evt)
     var stepSize = DE.analyticMassSpringDamper.stepSize;
     var clicked = function(){
     	
-    var results = solve.modularSolver(func, initialCond, startTime,endTime, 1e-3, 1e-3, undefined);
+    var results = solve.modularSolver(func, initialCond, startTime,endTime, 1e-3, 1e-3, undefined, undefined, false);
     //var otherRes = solve.solve(func, initialCond, startTime, endTime,.1, solve.dormandPrinceStep);
     var yVal = results.yVals;
     var tVal = results.tVals;
+    var tInterp = results.interpTimes;
+    var yinterp = results.interpFuncs;
  $(function(){   
 		var x = [];
 		
@@ -180,12 +182,20 @@ function doCheck(id,evt)
 				 data:[],
 				 points: {show:true}
 		 };
-   		 for(var i = 0; i< tVal.length; i++){
+         x[2+j] = {
+             data:[],
+             points: {show:true}
+         };
+   		 for(var i = 0; i< tVal.length-1; i++){
     		x[j].data.push([tVal[i],yVal[j][i]]);
+            var tM = (tInterp[i][1] + tInterp[i][0])/2;
+            var point = yinterp[i][j](tM);
+            x[2+j].data.push([tM, point]);
 
     	}
    		
 	 }
+
 	 
     $.plot($("#placeholder"), x);
 	 });
