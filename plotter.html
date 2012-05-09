@@ -18,10 +18,17 @@
 	
 	<p>Numeric Solution with Tolerance = 1 e-8(points), also plotted with the analytic solution(lines)</p>
 	<div id="placeholder2" style="width:600px;height:300px"></div>
-	
+
+    <h2>Error</h2>
+    <div id="placeholderError" style="width:600px;height:300px"></div>
+    <button type="button" onclick="">Plot</button>
+
  	<h2>Hi-Res IVP</h2>
  	 <div id="placeholder1" style="width:600px;height:300px"></div>
     <button type="button" onclick="clicked1()">Plot</button>
+
+
+
     
 <script type="text/javascript">
 function doCheck(id,evt)
@@ -176,6 +183,7 @@ function doCheck(id,evt)
     var yinterp = results.interpFuncs;
  $(function(){   
 		var x = [];
+
 		
 	 for(var j = 0; j<yVal.length; j++){
 		 x[j] ={
@@ -186,6 +194,8 @@ function doCheck(id,evt)
              data:[],
              points: {show:true}
          };
+
+
    		 for(var i = 0; i< tVal.length-1; i++){
     		x[j].data.push([tVal[i],yVal[j][i]]);
             var tM = (tInterp[i][1] + tInterp[i][0])/2;
@@ -206,14 +216,23 @@ function doCheck(id,evt)
  var analyticSoln = DE.analyticMassSpringDamper.analyticSol(tVal1, [5,0]);
  $(function(){   
 		var x = [];
-		
+		var err = [];
 	 for(var j = 0; j<yVal1.length; j++){
 		 x[j] ={
 				 data:[],
 				 points: {show:true}
 		 };
+         err[j] = {
+             data: [],
+             points: {show: true}
+         };
 		 for(var i = 0; i< tVal1.length; i++){
- 		x[j].data.push([tVal1[i],yVal1[j][i]]);
+             var t = tVal1[i];
+             var yV = yVal1[j][i];
+             var yA = analyticSoln[j][i];
+             var error = yV - yA;
+ 		x[j].data.push([t,yV]);
+        err[j].data.push([t, error]);
 
  	}		
 	 }
@@ -228,6 +247,7 @@ function doCheck(id,evt)
 	 }
 	 
  $.plot($("#placeholder2"), x);
+     $.plot($("#placeholderError"), err);
 	 });
     };
  var clicked1 = function(){

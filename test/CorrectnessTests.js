@@ -180,6 +180,7 @@ CorrectnessTest.prototype.testHiresIVP = function(){
     var len = numSoln.tVals.length;
     numSoln.yVals.forEach(function(v,i,a){
         var s = v[len-1];
+        assertEqualsDelta(s, expected, atol);
         console.log("Dim: %d    State: %d    Error: %d", i, s, Math.abs(s - expected[i]));
     });
 
@@ -202,6 +203,7 @@ CorrectnessTest.prototype.testPollutionIVP = function(){
     var len = numSoln.tVals.length;
     numSoln.yVals.forEach(function(v,i,a){
         var s = v[len-1];
+        assertEqualsDelta(s, expected, atol);
         console.log("Dim: %d    State: %d    Error: %d", i, s, Math.abs(s - expected[i]));
     });
 

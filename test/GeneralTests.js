@@ -143,7 +143,7 @@ GeneralTest.prototype.testInitialStep = function () {
 
     for (var i = 0; i < expectedValues.length; i++) {
 
-        result = s.eulerStep(de, i, y0, h);
+        result = s.modularSolver(de, i, y0, h);
         for (var j = 0; j < result.length; j++) {
             assertEquals("The first 3 values for using Euler's method to solve y' = y, y0 = 1, h = 1 should be [2,4,8]", expectedValues[i][j], result[j]);
         }

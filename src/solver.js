@@ -138,6 +138,7 @@ var solver = (function () {
 
 
                 DEParams.dt = initialStep || calculateFirstTimeStep(DEParams, integrator);
+                DEParams.dt = DEParams.dt /2;
 
 
 
@@ -147,10 +148,12 @@ var solver = (function () {
 
                 do{
                 DEParams = RKIntegrator(DEParams, integrator);
-                DEParams.error = estimateError(DEParams);
+               // DEParams.error = estimateError(DEParams);
                 //If the error is too big, reset the step and try again.
                 if(DEParams.error >= 1.0){
-                   // DEParams = resetStep(DEParams);
+                    console.log("Step Rejected.  Time: %d    DT: %d   Error: %d", DEParams.currentTime, DEParams.dt, DEParams.error);
+                    //DEParams = resetStep(DEParams);
+                    console.log("Time reset.    New Time: %d    New DT: %d", DEParams.currentTime, DEParams.dt);
                 }
                 } while(DEParams.error >= 1.0);
 
@@ -472,7 +475,8 @@ var solver = (function () {
         var t = DEParams.currentTime;
         var ydot = DEParams.ydot;
         var y = DEParams.state;
-        var Ki = DEParams.Ki;
+        var Ki = [];
+        Ki[0] = new Array(0);
         var dt = DEParams.dt;
         var tf = DEParams.tf;
         var firstSameAsLast = IntegratorParams.firstSameAsLast;
@@ -484,6 +488,8 @@ var solver = (function () {
         var yDotTmp = [];
         var solution = [];
         var solutionForErrorEstimation = [];
+        var er = 10;
+
 
             //If we don't already have K1 from the previous step, calculate it.
             if(!firstSameAsLast || firstStep || (yDotStart === 'undefined')) {
@@ -491,7 +497,7 @@ var solver = (function () {
                 firstStep = false;
             }
 
-
+        while(er >= 1.0){
         yDotStart.forEach(function (v, i, a) {
             var k = v * dt;
             Ki[0][i] = k;
@@ -518,12 +524,25 @@ var solver = (function () {
                     solutionForErrorEstimation[i] += BError[stage] * k;
                 });
             }
-
+            er = estimateError(DEParams, Ki, y, solution, dt );
+            var rke = [];
+            for(var dim = 0; dim < dims; ++dim){
+                rke[dim] = solution[dim] - solutionForErrorEstimation[dim];
+            }
+            if(er >= 1.0){
+                console.log("step rejected");
+                console.log("Time: %d    DT: %d    Error: %d", t, dt, er);
+                dt = dt /2;
+                DEParams.dt = dt;
+            }
+        }
 
         for(var dim = 0; dim < dims; ++dim){
             DEParams.previousState[dim] = y[dim];
             DEParams.state[dim] = solution[dim];
             DEParams.rkError[dim] = (solution[dim] - solutionForErrorEstimation[dim]);
+            DEParams.Ki = Ki;
+            DEParams.error = er;
         }
         DEParams.yDotStart = yDotStart;
         DEParams.yDotEnd = yDotTmp;
@@ -623,7 +642,7 @@ var solver = (function () {
         return step;
     };
 
-    var estimateError = function (DEParams) {
+    var estimateError = function (DEParams, KiVal, yVal, yNVal, dtNow) {
         "use strict"
         var error = 0;
         var E1 = 71.0 / 57600.0;
@@ -636,10 +655,10 @@ var solver = (function () {
         var atol = DEParams.atol;
         var rtol = DEParams.rtol;
         var dim = DEParams.dims;
-        var Ki = DEParams.Ki;
-        var y = DEParams.previousState;
-        var yNext = DEParams.state;
-        var dt = DEParams.dt;
+        var Ki = KiVal;
+        var y = yVal;
+        var yNext = yNVal;
+        var dt = dtNow;
 
         for (var i = 0; i < dim; ++i) {
             var sum = E1 * Ki[0][i] + E3 * Ki[2][i] + E4 * Ki[3][i] + E5 * Ki[4][i] + E6 * Ki[5][i] + E7 * Ki[6][i];
@@ -663,25 +682,27 @@ var solver = (function () {
         var error = DEParams.error;
         var exp = -1/5;
         var dt = DEParams.dt;
-        var scaleFactor = Math.min(DEParams.maxGrowth, Math.max(DEParams.minReduction, DEParams.safetyFactor * Math.pow(error, exp)));
+        //var scaleFactor = Math.min(DEParams.maxGrowth, Math.max(DEParams.minReduction, DEParams.safetyFactor * Math.pow(error, exp)));
 
-        dt = dt * scaleFactor;
-        if (Math.abs(dt) < DEParams.minStep) {
+        dt = dt * 0.5;
+        if ((Math.abs(dt) < DEParams.minStep) && DEParams.minStep !== 0) {
             dt = DEParams.reverse ? -DEParams.minStep : DEParams.minStep;
         }
 
         if (Math.abs(dt) > DEParams.maxStep) {
             dt = DEParams.reverse ? -DEParams.maxStep : DEParams.maxStep;
         }
-
-        DEParams.state = DEParams.previousState;
+        DEParams.previousState.forEach(function(v, i, a){
+            DEParams.state[i] = v;
+        });
+        //DEParams.state = DEParams.previousState;
         DEParams.currentTime = DEParams.previousTime;
         DEParams.dt = dt;
-
-        var yDotInit = DEParams.ydot(DEParams.currentTime, DEParams.state);
-        yDotInit.forEach(function(v,i,a){
-            DEParams.Ki[0][i] = v * dt;
-        });
+        DEParams.yDotStart = 'undefined';
+        //var yDotInit = DEParams.ydot(DEParams.currentTime, DEParams.state);
+        //yDotInit.forEach(function(v,i,a){
+          //  DEParams.Ki[0][i] = v * dt;
+        //});
         return DEParams;
 
     };
@@ -800,7 +821,7 @@ var solver = (function () {
             fz01234, fz12345,
             fz012345;
         var hermitePoly = function (z0, z2, z4, fz0, fz01, fz012, fz0123, fz01234, fz012345, t) {
-            console.log(arguments);
+            //console.log(arguments);
             var t1 = t - z0;
             var t1sq = (t1 * t1);
             var t2 = t - z2;
