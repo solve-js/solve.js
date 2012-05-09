@@ -11,9 +11,9 @@
     <h1>Mass Spring Damper</h1>
 	<p>Tolerance = 1 e-3, to show adaptive step size in action </p>
     <div id="placeholder" style="width:600px;height:300px"></div>
-    <input type="text" id="mSDmass" size="20px" value="10" class="formText" onblur="return doCheck('#mSDmass',event);">
-    <input type="text" id="mSDk" size="20px" value="5" class="formText" onblur="return doCheck('#mSDk',event);">
-    <input type="text" id="mSDb" size="20px" value="3" class="formText"  onblur="return doCheck('#mSDb',event);">
+    <input type="text" id="mSDmass" size="20px" value="Mass. Default value is 10." class="formText" onfocus="return selectInput('#mSDmass', event);" onblur="return doCheck('#mSDmass',event);">
+    <input type="text" id="mSDk" size="20px" value="Spring Constant. Default value is 5." class="formText" onfocus="return selectInput('#mSDk', event);" onblur="return doCheck('#mSDk',event);">
+    <input type="text" id="mSDb" size="20px" value="Damping Constant. Default value is 3." class="formText" onfocus="return selectInput('#mSDb', event);"  onblur="return doCheck('#mSDb',event);">
     <button type="button" onclick="clicked()">Plot</button>
 	
 	<p>Numeric Solution with Tolerance = 1 e-8(points), also plotted with the analytic solution(lines)</p>
@@ -31,16 +31,60 @@
 
     
 <script type="text/javascript">
+function selectInput(id, evt){
+    var temp=parseFloat($(id).val());
+    if (isNaN(temp) || temp ==0)
+        temp='undefined';
+    if(temp === 'undefined'){
+        if(id == "#mSDmass"){
+            $(id).val(10);
+            DE.analyticMassSpringDamper.m = 10;
+        }
+        if(id == "#mSDk"){
+            $(id).val(5);
+            DE.analyticMassSpringDamper.k = 5;
+        }
+        if(id == "#mSDb"){
+            $(id).val(3);
+            DE.analyticMassSpringDamper.b = 3;
+        }
+    }
+
+}
 function doCheck(id,evt)
 {
     var temp=parseFloat($(id).val());
-	
-    if (isNaN(temp))
+    if (isNaN(temp) || temp ==0)
         temp='undefined';
-    if (temp==0)
-        temp='undefined';
+    if(temp === 'undefined'){
+        if(id == "#mSDmass"){
+            $(id).val(10);
+            DE.analyticMassSpringDamper.m = 10;
+        }
+        if(id == "#mSDk"){
+            $(id).val(5);
+            DE.analyticMassSpringDamper.k = 5;
+        }
+        if(id == "#mSDb"){
+            $(id).val(3);
+            DE.analyticMassSpringDamper.b = 3;
+        }
+    } else {
+        if(id == "#mSDmass"){
+            $(id).val(temp);
+            DE.analyticMassSpringDamper.m = temp;
+        }
+        if(id == "#mSDk"){
+            $(id).val(temp);
+            DE.analyticMassSpringDamper.k = temp;
+        }
+        if(id == "#mSDb"){
+            $(id).val(temp);
+            DE.analyticMassSpringDamper.b = temp;
+        }
 
-    $(id).val(temp);
+    }
+
 }
 
 
@@ -61,18 +105,17 @@ function doCheck(id,evt)
         stepSize:1
     };
     DE.analyticMassSpringDamper = {
-    		
-            m: $('#mSDmass').val() || 10,
-            k: $('#mSDk').val() || 5,
-            b: $('#mSDb').val() || 3,
+         m: 10,
+        k: 5,
+        b: 3,
             startTime: 0,
             endTime: 25,
             stepSize: 0.1,
             y0: [5, 0],
             func: function (t, y){
-                var b = $('#mSDb').val() || 3;
-                var k = $('#mSDk').val() || 5;
-                var m = $('#mSDmass').val() || 10;
+                var m = this.m;
+                var k = this.k;
+                var b = this.b;
                 var wn = (Math.sqrt(k/m));
                 var zeta = (0.5*b/Math.sqrt(k*m));
                 var ydot = [];
@@ -82,9 +125,9 @@ function doCheck(id,evt)
                 return ydot;
             },
             analyticSol: function(tvals, y0){
-            	var b = $('#mSDb').val() || 3;
-                var k = $('#mSDk').val() || 5;
-                var m = $('#mSDmass').val() || 10;
+            	var b = this.b;
+                var k = this.k;
+                var m = this.m;
                 var wn = (Math.sqrt(k/m));
                 var zeta = (0.5*b/Math.sqrt(k*m));
                 var timespan = tvals;
@@ -167,7 +210,7 @@ function doCheck(id,evt)
                 0.2850001604814231e-2],
             rtol:1.1e-18,
             atol:1.1e-18,
-            dt0:1e-8
+            dt0:1.1e-18
         };
     var func = DE.analyticMassSpringDamper.func;
     var initialCond = DE.analyticMassSpringDamper.y0;
@@ -177,8 +220,8 @@ function doCheck(id,evt)
 
 
 var clicked = function(){
-    	
-    var results = solve.modularSolver(func, initialCond, startTime,endTime, 1e-3, 1e-3, undefined, undefined, false);
+    var bFunc = func.bind(DE.analyticMassSpringDamper);
+    var results = solve.modularSolver(bFunc, initialCond, startTime,endTime, 1e-3, 1e-3, undefined, undefined, true);
     //var otherRes = solve.solve(func, initialCond, startTime, endTime,.1, solve.dormandPrinceStep);
     var yVal = results.yVals;
     var tVal = results.tVals;
@@ -213,7 +256,7 @@ var clicked = function(){
     $.plot($("#placeholder"), x);
 	 });
  
- var results1 = solve.modularSolver(func, initialCond, startTime,endTime, 1e-8, 1e-8, undefined);
+ var results1 = solve.modularSolver(bFunc, initialCond, startTime,endTime, 1e-8, 1e-8, undefined);
  var yVal1 = results1.yVals;
  var tVal1 = results1.tVals;
  var analyticSoln = DE.analyticMassSpringDamper.analyticSol(tVal1, [5,0]);
@@ -230,12 +273,15 @@ var clicked = function(){
              points: {show: true}
          };
 		 for(var i = 0; i< tVal1.length; i++){
+
              var t = tVal1[i];
              var yV = yVal1[j][i];
              var yA = analyticSoln[j][i];
-             var error = yV - yA;
+             var error = Math.abs(yV - yA);
+             if(i % 4 === 0){
  		x[j].data.push([t,yV]);
         err[j].data.push([t, error]);
+             }
 
  	}		
 	 }
@@ -263,7 +309,7 @@ var clicked = function(){
 	    var initialStep = DE.hiresIVP.dt0;
 	    var expected = DE.hiresIVP.expectedValues;
 
-	    var numSoln = solve.modularSolver(func, initCond, start, end, atol, rtol, undefined, initialStep);
+	    var numSoln = solve.modularSolver(func, initCond, start, end, atol, rtol, undefined, initialStep, false);
 	    //var otherRes = solve.solve(func, initialCond, startTime, endTime,.1, solve.dormandPrinceStep);
 	    var yVal = numSoln.yVals;
 	    var tVal = numSoln.tVals;
@@ -276,8 +322,10 @@ var clicked = function(){
 					 lines: {show:true},
 					 points: {show:true}
 			 };
-	   		 for(var i = 0; i< tVal.length; i = i+1000){
+	   		 for(var i = 0; i< tVal.length; ++i){
+                    if(i % 200 === 0){
 	    		x[j].data.push([tVal[i],yVal[j][i]]);
+                    }
 
 	    	}
 		 }
