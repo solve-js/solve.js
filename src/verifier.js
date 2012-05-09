@@ -146,10 +146,12 @@ var Verify = (function () {
             var value = _value;
             var name = _name;
             var valueSpecified = hasValue(value);
+            var lBound = Math.min(lowerBound, upperBound);
+            var uBound = Math.max(lowerBound, upperBound);
 
-            throwExceptionIf(valueSpecified && typeof (value) !== typeof (lowerBound), "Comparison lowerBound must be of the same type.", TypeError);
-            throwExceptionIf(valueSpecified && typeof (value) !== typeof (upperBound), "Comparison upperBound must be of the same type.", TypeError);
-            throwExceptionIf(valueSpecified && (value < lowerBound || value > upperBound), name + " must be between '" + lowerBound + "' and '" + upperBound + "'.", RangeError);
+            throwExceptionIf(valueSpecified && typeof (value) !== typeof (lBound), "Comparison lowerBound must be of the same type.", TypeError);
+            throwExceptionIf(valueSpecified && typeof (value) !== typeof (uBound), "Comparison upperBound must be of the same type.", TypeError);
+            throwExceptionIf(valueSpecified && (value < lBound || value > uBound), name + " must be between '" + lBound + "' and '" + uBound + "'.", RangeError);
 
             return _comparableVerifier;
         },
@@ -220,7 +222,7 @@ var Verify = (function () {
         whenDefined:function () {
             var value = _value;
             var name = _name;
-            throwExceptionIf(value === null, name + " must not be null.", ReferenceError);
+            throwExceptionIf((value === null), name + " must not be null.", ReferenceError);
             return _typeVerifier;
         },
         whenHasValue:function () {

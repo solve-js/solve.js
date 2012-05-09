@@ -107,6 +107,7 @@ var solver = (function () {
             Verify.value(absoluteTolerance, "absoluteTolerance").always().isNumber();
             Verify.value(relativeTolerance, "relativeTolerance").always().isNumber();
             Verify.value(integrationMethod, "integrationMethod").whenDefined().isFunction();
+            //Verify.value(initialStep, "initialStep").whenDefined().isNumber().isFinite().between(startTime, endTime);
 
             var results = {
                 yVals:[
@@ -120,44 +121,39 @@ var solver = (function () {
                 interpFuncs:[]
             };
 
+            //DEParams is an object which holds the state of the differential equations between steps along with relevant properties
             var DEParams = EquationParameters(deFunction, startTime, endTime, initialConditions, absoluteTolerance, relativeTolerance);
-            //DEParams.dt0 = 0.1;
+
+            //integrator simply holds the constants and parameters associated with a particular Runge-Kutta implementation. Here, we default to Dormand-Prince.
             var integrator = integrationMethod || s.DormandPrince45Integrator;
-            var vals = [
-                []
-            ];
+            var vals = [[]];
+            var time = [];
+
+
             var dims = DEParams.dims;
             for (var i = 0; i < dims; ++i) {
-
                 vals[i] = [];
                 vals[i][0] = initialConditions[i];
                 DEParams.state[i] = initialConditions[i];
             }
-            var time = [];
             time.push(startTime);
 
 
-                DEParams.dt = initialStep || calculateFirstTimeStep(DEParams, integrator);
-                DEParams.dt = DEParams.dt /2;
-
-
+            //Unless the user specifies a starting step size, we estimate a good starting value based on the characteristics of the differential equation
+            DEParams.dt = initialStep || calculateFirstTimeStep(DEParams, integrator);
 
             DEParams.dense = interp || false;
             var zeros = false;
+
+            //Within this block, the actual integration steps are performed
             while (!DEParams.finished){
 
-                do{
-                DEParams = RKIntegrator(DEParams, integrator);
-               // DEParams.error = estimateError(DEParams);
-                //If the error is too big, reset the step and try again.
-                if(DEParams.error >= 1.0){
-                    console.log("Step Rejected.  Time: %d    DT: %d   Error: %d", DEParams.currentTime, DEParams.dt, DEParams.error);
-                    //DEParams = resetStep(DEParams);
-                    console.log("Time reset.    New Time: %d    New DT: %d", DEParams.currentTime, DEParams.dt);
-                }
-                } while(DEParams.error >= 1.0);
 
-                //otherwise, the step is good
+            DEParams = RKIntegrator(DEParams, integrator);
+
+
+
+
 
                 DEParams.previousTime = DEParams.currentTime;
                 DEParams.currentTime = DEParams.currentTime + DEParams.dt;
@@ -278,8 +274,20 @@ var solver = (function () {
         }
     };
 
-    //place holder for parameters during solving, can be used for customization
-    var EquationParameters = function (deFunc, t0, tf, initialCond, absTolerance, relTolerance) {
+
+    /**
+     * @description Creates a new EquationParameters object used for holding the state of the differential equation along with relevant parameters
+     * @class
+     * @param {Function} deFunc The function that defines the differential equation
+     * @param {Number} t0
+     * @param {Number} tf
+     * @param {Number[]} initialCond An array containing the initial conditions for the differential equation
+     * @param {Number|Number[]} [absTolerance] The absolute tolerance(s). May be either a single scalar value or an array of values corresponding to the allowable tolerance for each dimension.
+     * @param {Number|Number[]} [relTolerance] The allowable relative tolerance. May be either a single scalar value or an array of values corresponding to the allowable tolerance for each dimension.
+     * @return {EquationParameters}
+     */
+    var EquationParameters = function (deFunc, t0, tf, initialCond, absTolerance, relTolerance) //noinspection JSValidateTypes
+    {
         var params = Object.create(EquationParameters.prototype);
         params.ydot = deFunc;
         params.t0 = t0;
@@ -292,15 +300,16 @@ var solver = (function () {
             []
         ];
         params.dims = initialCond.length;
-        params.atol = absTolerance || 1e-8; //TODO: Find better/realistic defaults for these tolerances
+
+        params.atol = absTolerance || 1e-8;
         params.rtol = relTolerance || 1e-8;
 
         /*
-         * Safety Factor, Max Growth Rate, and Min Shrink Rate all taken from Apache Commons Math
+         * Safety Factor, Max Growth Rate, and Min Shrink Rate all taken from Apache Commons Math library http://commons.apache.org/math/
          */
-        params.safetyFactor = 0.9;
+        params.safetyFactor = 0.8;
         params.minReduction = 0.2;
-        params.maxGrowth = 5;
+        params.maxGrowth = 10;
 
         params.minStep = 0;
         params.maxStep = Math.abs(params.tf - params.t0);
@@ -326,6 +335,7 @@ var solver = (function () {
         return params;
     };
 
+
     var IntegratorParameters = function (A_coefficients, B_coefficients, C_coefficients, interpolationFunc, firstSameAsLast) {
         var params = Object.create(IntegratorParameters.prototype);
 
@@ -339,6 +349,11 @@ var solver = (function () {
         return params;
     };
 
+    /**
+     * @deprecated
+     * @description Class which contains parameters used for a previously used interpolation method
+     * @constructor
+     */
     var InterpolationParameters = function () {
         var params = Object.create(InterpolationParameters.prototype);
         return params;
@@ -346,7 +361,7 @@ var solver = (function () {
 
     //Parameters needed for dense output/interpolation when using Dormand-Prince
     /**
-     *
+     * @deprecated
      * @type {InterpolationParameters}
      */
     s.DormandPrinceInterpolator = (function () {
@@ -428,6 +443,11 @@ var solver = (function () {
      * @type {IntegratorParameters}
      * @description Holds an object containing the parameters needed for the integrator to integrate using the Dormand-Prince method
      */
+
+    /**
+     * @description Contains the parameters and coefficients for integration using the Dormand-Prince method
+     * @type {IntegratorParameters}
+     */
     s.DormandPrince45Integrator = (function () {
         //Coefficients for  RK45/Dormand-Prince integration
         var A = [
@@ -453,11 +473,10 @@ var solver = (function () {
     })();
 
     /**
-    *
-    * @type {IntegratorParameters}
-    * @description Holds an object containing the parameters needed for the integrator to integrate using any Runge-Kutta method
-    * can be customized to use any Runge-Kutta method
-    */
+     * @description Integrates one time step in the differential equation. If the calculated result has error outside specified tolerances, the step is rejected and recomputed with a smaller step size until the error is sufficiently small.
+     * @param {EquationParameters} DEParams The parameters object holding the information needed for integrating this particular differential equation.
+     * @param {IntegratorParameters} IntegratorParams The parameters object holding the coefficients and parameters for a specific integration method
+      */
     var RKIntegrator = function (DEParams, IntegratorParams) {
         "use strict"
         Verify.value(DEParams, "DEParams").always().isPrototypeOf(EquationParameters);
@@ -488,16 +507,24 @@ var solver = (function () {
         var yDotTmp = [];
         var solution = [];
         var solutionForErrorEstimation = [];
-        var er = 10;
+        var rejectStep = false;
+        var errors = {
+            absoluteError: 0,
+            relativeError: 0,
+            percentError: 0
+        };
 
 
-            //If we don't already have K1 from the previous step, calculate it.
+        /**
+         * If we don't already have the derivative from the previous step, calculate it.
+         * Many methods, including Dormand-Prince have the property that the derivative calculated for the final stage of the previous step can be reused here to save a call to ydot
+         */
             if(!firstSameAsLast || firstStep || (yDotStart === 'undefined')) {
                 yDotStart = ydot(t, y);
                 firstStep = false;
             }
 
-        while(er >= 1.0){
+       do{
         yDotStart.forEach(function (v, i, a) {
             var k = v * dt;
             Ki[0][i] = k;
@@ -524,25 +551,23 @@ var solver = (function () {
                     solutionForErrorEstimation[i] += BError[stage] * k;
                 });
             }
-            er = estimateError(DEParams, Ki, y, solution, dt );
-            var rke = [];
-            for(var dim = 0; dim < dims; ++dim){
-                rke[dim] = solution[dim] - solutionForErrorEstimation[dim];
-            }
-            if(er >= 1.0){
+            //er = estimateError(DEParams, Ki, y, solution, dt );
+            errors = estimateErrors(solution, solutionForErrorEstimation, dt);
+            rejectStep = isStepGood(DEParams, solutionForErrorEstimation, errors, dt);
+            if(rejectStep){
                 console.log("step rejected");
-                console.log("Time: %d    DT: %d    Error: %d", t, dt, er);
-                dt = dt /2;
+                console.log("Time: %d    DT: %d    Error: %d", t, dt, Math.max.apply(Math, errors.absoluteError));
+                dt = rejectStep;
                 DEParams.dt = dt;
             }
-        }
+        }while(rejectStep)
 
         for(var dim = 0; dim < dims; ++dim){
             DEParams.previousState[dim] = y[dim];
             DEParams.state[dim] = solution[dim];
             DEParams.rkError[dim] = (solution[dim] - solutionForErrorEstimation[dim]);
             DEParams.Ki = Ki;
-            DEParams.error = er;
+            DEParams.error = errors;
         }
         DEParams.yDotStart = yDotStart;
         DEParams.yDotEnd = yDotTmp;
@@ -642,6 +667,73 @@ var solver = (function () {
         return step;
     };
 
+    var estimateErrors = function(solution, solutionForErrorEstimation, dt){
+        "use strict"
+        var dims = solution.length;
+        var solError = solutionForErrorEstimation;
+        var aError = [];
+        var rError = [];
+        var beta = [];
+
+
+
+        for(var dim = 0; dim < dims; ++dim){
+            var sol = solution[dim];
+            var solE = solError[dim];
+            var diff =  Math.abs(sol - solE);
+            aError[dim] = diff;
+            beta[dim] = diff / dt;
+            rError[dim] = diff/Math.abs(solE);
+        }
+        return {
+            absoluteError: aError,
+            relativeError: rError
+        };
+
+
+    };
+
+    var isStepGood = function(DEParams, solution, errors, dt){
+        "use strict"
+        var atol = DEParams.atol;
+        var rtol = DEParams.rtol;
+        var absErr = errors.absoluteError;
+        var relErr = errors.relativeError;
+
+        var badAbs = 0;
+        var badRel = 0;
+        var absDim = 0;
+        var relDim = 0;
+        var badAt = 0;
+        var badRt = 0;
+        var newDt = 0;
+        var absDt = 0;
+        var relDt = 0;
+
+        for(var dim = 0; dim < absErr.length; ++dim){
+            var at = atol[dim] || atol;
+            var rt = rtol[dim] || rtol;
+            if((absErr[dim] > at) && (absErr[dim] > badAbs)){
+                badAbs = absErr[dim];
+                absDim = dim;
+                badAt = at;
+            }
+            if((relErr[dim] > rt) && (relErr[dim] > badRel)){
+                badRel = relErr[dim];
+                relDim = dim;
+                badRt = rt;
+            }
+        }
+
+        if(badAbs !== 0){
+        absDt = Math.pow((badAt * Math.abs(dt))/badAbs, 1/5);
+        }
+        if(badRel !== 0){
+        relDt = Math.pow((badRt * Math.abs(solution[relDim]) * Math.abs(dt) / absErr[relDim]), 1/5);
+        }
+       newDt = Math.min(absDt, relDt);
+        return newDt;
+    };
     var estimateError = function (DEParams, KiVal, yVal, yNVal, dtNow) {
         "use strict"
         var error = 0;
@@ -738,24 +830,60 @@ var solver = (function () {
     };
 
     var calculateNextTimeStep = function(DEParams){
-        var exp = -1/5;
-        var dt = DEParams.dt;
-        var scaleFactor = Math.min(DEParams.maxGrowth, Math.max(DEParams.minReduction, DEParams.safetyFactor * Math.pow(DEParams.error, exp)));
+        "use strict"
+        var atol = DEParams.atol;
+        var rtol = DEParams.rtol;
+        var absErr = DEParams.error.absoluteError;
+        var relErr = DEParams.error.relativeError;
+        var solution = DEParams.state;
+        var safetyFactor = DEParams.safetyFactor;
+        var maxGrowth = DEParams.maxGrowth;
+        var minReduction = DEParams.minReduction;
 
-        dt = dt * scaleFactor;
-        if (Math.abs(dt) < DEParams.minStep) {
-            dt = DEParams.reverse ? -DEParams.minStep : DEParams.minStep;
+        var badAbs = 0;
+        var badRel = 0;
+        var absDim = 0;
+        var relDim = 0;
+        var badAt = 0;
+        var badRt = 0;
+        var absDt = [];
+        var relDt = [];
+        var dt = Math.abs(DEParams.dt);
+        var newDt = 0;
+
+        for(var dim = 0; dim < absErr.length; ++dim){
+            var at = atol[dim] || atol;
+            var rt = rtol[dim] || rtol;
+            absDt[dim] = Math.pow((at * dt)/absErr[dim], 1/5) * safetyFactor;
+            relDt[dim] = Math.pow((rt * Math.abs(solution[dim]) * dt) / absErr[dim], 1/5) * safetyFactor;
         }
 
-        if (Math.abs(dt) > DEParams.maxStep) {
-            dt = DEParams.reverse ? -DEParams.maxStep : DEParams.maxStep;
+
+        var aMin = Math.min.apply(Math, absDt);
+        var rMin = Math.min.apply(Math, relDt);
+        newDt = Math.min(aMin, rMin);
+        var change = (newDt/dt);
+        if(change > maxGrowth){
+            newDt = dt * maxGrowth;
         }
-        var nextT = DEParams.currentTime + dt;
+        if(change < minReduction){
+            newDt = dt * minReduction;
+        }
+        newDt = DEParams.reverse ? -newDt : newDt;
+        if(Math.abs(newDt) < DEParams.minStep){
+            newDt = DEParams.reverse ? -DEParams.minStep : DEParams.minStep;
+        }
+        if(Math.abs(newDt) > DEParams.maxStep){
+            newDt = DEParams.reverse ? -DEParams.maxStep : DEParams.maxStep;
+        }
+
+        var nextT = DEParams.currentTime + newDt;
         if((DEParams.reverse && (nextT <= DEParams.tf)) || (!DEParams.reverse && (nextT >= DEParams.tf))){
-            dt = DEParams.tf - DEParams.currentTime;
+            newDt = DEParams.tf - DEParams.currentTime;
             DEParams.finalStep = true;
         }
-        return dt;
+        DEParams.dt = newDt;
+        return newDt;
 
     };
 

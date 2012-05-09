@@ -11,9 +11,9 @@
     <h1>Mass Spring Damper</h1>
 	<p>Tolerance = 1 e-3, to show adaptive step size in action </p>
     <div id="placeholder" style="width:600px;height:300px"></div>
-    <input type="text" id="mSDmass" size="20px" value="Enter mass M" class="formText" onblur="return doCheck('#mSDmass',event);">
-    <input type="text" id="mSDk" size="20px" value="Enter spring constant K" class="formText" onblur="return doCheck('#mSDk',event);">
-    <input type="text" id="mSDb" size="20px" value="Enter damping constant B" class="formText"  onblur="return doCheck('#mSDb',event);">
+    <input type="text" id="mSDmass" size="20px" value="10" class="formText" onblur="return doCheck('#mSDmass',event);">
+    <input type="text" id="mSDk" size="20px" value="5" class="formText" onblur="return doCheck('#mSDk',event);">
+    <input type="text" id="mSDb" size="20px" value="3" class="formText"  onblur="return doCheck('#mSDb',event);">
     <button type="button" onclick="clicked()">Plot</button>
 	
 	<p>Numeric Solution with Tolerance = 1 e-8(points), also plotted with the analytic solution(lines)</p>
@@ -36,12 +36,13 @@ function doCheck(id,evt)
     var temp=parseFloat($(id).val());
 	
     if (isNaN(temp))
-        temp='0.0';
+        temp='undefined';
     if (temp==0)
-        temp='0.0';
+        temp='undefined';
 
     $(id).val(temp);
 }
+
 
     var solve = Object.create(solver);
     var DE = {};
@@ -61,17 +62,17 @@ function doCheck(id,evt)
     };
     DE.analyticMassSpringDamper = {
     		
-            m: $('#mSDmass').val(),
-            k: $('#mSDk').val(),
-            b: $('#mSDb').val(),
+            m: $('#mSDmass').val() || 10,
+            k: $('#mSDk').val() || 5,
+            b: $('#mSDb').val() || 3,
             startTime: 0,
             endTime: 25,
             stepSize: 0.1,
             y0: [5, 0],
             func: function (t, y){
-                var b = $('#mSDb').val();
-                var k = $('#mSDk').val();
-                var m = $('#mSDmass').val();
+                var b = $('#mSDb').val() || 3;
+                var k = $('#mSDk').val() || 5;
+                var m = $('#mSDmass').val() || 10;
                 var wn = (Math.sqrt(k/m));
                 var zeta = (0.5*b/Math.sqrt(k*m));
                 var ydot = [];
@@ -81,9 +82,9 @@ function doCheck(id,evt)
                 return ydot;
             },
             analyticSol: function(tvals, y0){
-            	var b = $('#mSDb').val();
-                var k = $('#mSDk').val();
-                var m = $('#mSDmass').val();
+            	var b = $('#mSDb').val() || 3;
+                var k = $('#mSDk').val() || 5;
+                var m = $('#mSDmass').val() || 10;
                 var wn = (Math.sqrt(k/m));
                 var zeta = (0.5*b/Math.sqrt(k*m));
                 var timespan = tvals;
@@ -173,7 +174,9 @@ function doCheck(id,evt)
     var startTime = DE.analyticMassSpringDamper.startTime;
     var endTime = DE.analyticMassSpringDamper.endTime;
     var stepSize = DE.analyticMassSpringDamper.stepSize;
-    var clicked = function(){
+
+
+var clicked = function(){
     	
     var results = solve.modularSolver(func, initialCond, startTime,endTime, 1e-3, 1e-3, undefined, undefined, false);
     //var otherRes = solve.solve(func, initialCond, startTime, endTime,.1, solve.dormandPrinceStep);
