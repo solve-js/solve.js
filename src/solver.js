@@ -13,7 +13,136 @@
 var solver = (function () {
     var s = {};
     /**
+     * @description Creates a new EquationParameters object used for holding the state of the differential equation along with relevant parameters
+     * @class
+     * @param {Function} deFunc The function that defines the differential equation
+     * @param {Number} t0
+     * @param {Number} tf
+     * @param {Number[]} initialCond An array containing the initial conditions for the differential equation
+     * @param {Number|Number[]} [absTolerance] The absolute tolerance(s). May be either a single scalar value or an array of values corresponding to the allowable tolerance for each dimension.
+     * @param {Number|Number[]} [relTolerance] The allowable relative tolerance. May be either a single scalar value or an array of values corresponding to the allowable tolerance for each dimension.
+     * @type {EquationParameters}
+     * @returns {EquationParameters}
+     */
+    var EquationParameters = function (deFunc, t0, tf, initialCond, absTolerance, relTolerance, interpolate) //noinspection JSValidateTypes
+    {
+        /**
+         * @lends {EquationParameters.prototype}
+         */
+        var params = Object.create(EquationParameters.prototype);
+        params.ydot = deFunc;
+        params.t0 = t0;
+        params.tf = tf;
+        params.y0 = initialCond;
+
+        params.dt0 = 0;
+        params.dt = 0;
+        params.Ki = [
+            []
+        ];
+        params.dims = initialCond.length;
+
+        params.atol = absTolerance || 1e-8;
+        params.rtol = relTolerance || 1e-8;
+
+        /*
+         * Safety Factor, Max Growth Rate, and Min Shrink Rate all taken from Apache Commons Math library http://commons.apache.org/math/
+         */
+        params.safetyFactor = 0.9;
+        params.minReduction = 0.2;
+        params.maxGrowth = 10;
+
+        params.minStep = 1e-80;
+        params.maxStep = Math.abs(params.tf - params.t0);
+        params.state = [];
+        params.previousState = [];
+        params.yDotStart = [];
+        params.yDotEnd = [];
+        params.currentTime = t0;
+        params.previousTime = 0;
+        params.firstStep = true;
+        params.finalStep = false;
+        params.finished = false;
+        params.reverse = (t0 > tf);
+        params.useDenseOutput = false;
+        params.calculateMidpoint = false;
+        params.interpFuncs = new Array(0);
+        params.interpTimes = new Array(0);
+        params.midpoints = [];
+        params.midT;
+        params.error = {
+            relativeNorm: 0,
+            relativeError: [],
+            absoluteError: []
+        };
+        params.inverseInterpFuncs = new Array(0);
+        params.rejectedSteps = 0;
+        params.rkError = [];
+        params.eventHandlers = [];
+        return params;
+    };
+
+    /**
+     * @description Creates an object containing the parameters needed for the integrator to integrate using the Dormand-Prince method
+     * @param A_coefficients
+     * @param B_coefficients
+     * @param C_coefficients
+     * @param interpolationFunc
+     * @param firstSameAsLast
+     * @return {*}
+     * @class
+     */
+    var IntegratorParameters = function (A_coefficients, B_coefficients, C_coefficients, interpolationFunc, firstSameAsLast) {
+        /**
+         * @lends {IntegratorParameters.prototype}
+         */
+        var params = Object.create(IntegratorParameters.prototype);
+
+        params.A = A_coefficients;
+        params.B = B_coefficients;
+        params.BError;
+        params.C = C_coefficients;
+        params.stages = C_coefficients.length + 1;
+        params.interpolate = interpolationFunc;
+        params.firstSameAsLast = firstSameAsLast || false;
+        return params;
+    };
+
+    /**
+     * @description Contains the parameters and coefficients for integration using the Dormand-Prince method
+     * @type {IntegratorParameters}
+     */
+    s.DormandPrince45Integrator = (function () {
+        //Coefficients for  RK45/Dormand-Prince integration
+        var A = [
+            [1.0 / 5.0],
+            [3.0 / 40.0, 9.0 / 40.0],
+            [44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0],
+            [19372.0 / 6561.0, -25360.0 / 2187.0, 64448.0 / 6561.0, -212.0 / 729.0],
+            [9017.0 / 3168.0, -355.0 / 33.0, 46732.0 / 5247.0, 49.0 / 176.0, -5103.0 / 18656.0],
+            [35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0, -2187.0 / 6784.0, 11.0 / 84.0]
+        ];
+
+        var B = [35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0, -2187.0 / 6784.0, 11.0 / 84.0, 0.0];
+        var BError = [5179 / 57600, 0, 7571 / 16695, 393 / 640, -92097 / 339200, 187 / 2100, 1 / 40];
+
+
+        var C = [1.0 / 5.0, 3.0 / 10.0, 4.0 / 5.0, 8.0 / 9.0, 1.0, 1.0];
+
+        var DPparams = IntegratorParameters(A, B, C, 'undefined', true);
+        DPparams.BError = BError;
+        DPparams.order = 5;
+       // DPparams.firstSameAsLast = true;
+        /**
+         * @returns {IntegratorParameters}
+         */
+        return DPparams;
+    })();
+
+
+    /**
      * @function
+     * @deprecated
      * @param {Function} deFunction The function representing the Differential Equation to be solved
      * @param {Number[]} y0 An array containing the initial values to the solution. Must be provided as an array, even if there is only one value.
      * @param {Number} t0 The time value at which to begin integrating the function.
@@ -151,48 +280,23 @@ var solver = (function () {
 
             DEParams = RKIntegrator(DEParams, integrator);
 
-
-
-
-
                 DEParams.previousTime = DEParams.currentTime;
                 DEParams.currentTime = DEParams.currentTime + DEParams.dt;
                 if(DEParams.dense || DEParams.calculateMidpoint){
                     DEParams.interpFuncs.push(getInterpolatingFunctions(DEParams));
                     DEParams.interpTimes.push([DEParams.previousTime, DEParams.currentTime]);
-                    //var tmp = getInverseInterpolatingFunctions(DEParams);
-                    //generate 3 interpolated points: midpoint and an equidistant point on each side
-                    //var midp = DEParams.previousTime + (DEParams.dt/2);
-                    //var pt1 = DEParams.previousTime + ((midp - DEParams.previousTime)/2);
-                    //var pt2 = DEParams.currentTime - ((DEParams.currentTime - midp)/2);
-                    //for(var i = 0; i < DEParams.interpFuncs.length; ++i){
-                      //  var fn = DEParams.interpFuncs[i];
-                        //vals[i].push(fn(pt1));
-                        //vals[i].push(fn(midp));
-                        //vals[i].push(fn(pt2));
-                    //}
-                    //time.push(pt1);
-                    //time.push(midp);
-                    //time.push(pt2);
+
                     if(findZeros){
-                       // var zeros = findZeros(DEParams);
+                        var zeros = findZeros(DEParams);
                     }
                 }
                 for (var i = 0; i < dims; ++i) {
                     vals[i].push(DEParams.state[i]);
-                    //DEParams.yDotStart[i] = DEParams.yDotEnd[i];
-                    //DEParams.previousState[i] = DEParams.state[i];
                 }
-
                 time.push(DEParams.currentTime);
                 DEParams.yDotStart = DEParams.yDotEnd;
-                //figure out the next time step
-                //DEParams.dt = calculateNextTimeStep2(DEParams.dt, DEParams.rkError, 1e-5);
+
                 DEParams.dt = calculateNextTimeStep(DEParams);
-
-
-                //handle events...
-                //maybe some interpolation...
 
             }
 
@@ -246,6 +350,7 @@ var solver = (function () {
     };
 
     /**
+     * @deprecated
      * @function
      * @param {Function} ydot The function representing the Differential Equation that is being solved
      * @param {Number} t The time value at which the DE is being evaluated for this step
@@ -275,202 +380,6 @@ var solver = (function () {
     };
 
 
-    /**
-     * @description Creates a new EquationParameters object used for holding the state of the differential equation along with relevant parameters
-     * @class
-     * @param {Function} deFunc The function that defines the differential equation
-     * @param {Number} t0
-     * @param {Number} tf
-     * @param {Number[]} initialCond An array containing the initial conditions for the differential equation
-     * @param {Number|Number[]} [absTolerance] The absolute tolerance(s). May be either a single scalar value or an array of values corresponding to the allowable tolerance for each dimension.
-     * @param {Number|Number[]} [relTolerance] The allowable relative tolerance. May be either a single scalar value or an array of values corresponding to the allowable tolerance for each dimension.
-     * @return {EquationParameters}
-     */
-    var EquationParameters = function (deFunc, t0, tf, initialCond, absTolerance, relTolerance) //noinspection JSValidateTypes
-    {
-        var params = Object.create(EquationParameters.prototype);
-        params.ydot = deFunc;
-        params.t0 = t0;
-        params.tf = tf;
-        params.y0 = initialCond;
-
-        params.dt0 = 0;
-        params.dt = 0;
-        params.Ki = [
-            []
-        ];
-        params.dims = initialCond.length;
-
-        params.atol = absTolerance || 1e-8;
-        params.rtol = relTolerance || 1e-8;
-
-        /*
-         * Safety Factor, Max Growth Rate, and Min Shrink Rate all taken from Apache Commons Math library http://commons.apache.org/math/
-         */
-        params.safetyFactor = 0.8;
-        params.minReduction = 0.2;
-        params.maxGrowth = 10;
-
-        params.minStep = 0;
-        params.maxStep = Math.abs(params.tf - params.t0);
-        params.state = [];
-        params.previousState = [];
-        params.yDotStart = [];
-        params.yDotEnd = [];
-        params.currentTime = t0;
-        params.previousTime = 0;
-        params.firstStep = true;
-        params.finalStep = false;
-        params.finished = false;
-        params.reverse = (t0 > tf);
-        params.useDenseOutput = false;
-        params.calculateMidpoint = true;
-        params.interpFuncs = new Array(0);
-        params.interpTimes = new Array(0);
-        params.midpoints = [];
-        params.midT;
-        params.inverseInterpFuncs = new Array(0);
-        params.rkError = [];
-        params.eventHandlers = [];
-        return params;
-    };
-
-
-    var IntegratorParameters = function (A_coefficients, B_coefficients, C_coefficients, interpolationFunc, firstSameAsLast) {
-        var params = Object.create(IntegratorParameters.prototype);
-
-        params.A = A_coefficients;
-        params.B = B_coefficients;
-        params.BError;
-        params.C = C_coefficients;
-        params.stages = C_coefficients.length + 1;
-        params.interpolate = interpolationFunc;
-        params.firstSameAsLast = firstSameAsLast || false;
-        return params;
-    };
-
-    /**
-     * @deprecated
-     * @description Class which contains parameters used for a previously used interpolation method
-     * @constructor
-     */
-    var InterpolationParameters = function () {
-        var params = Object.create(InterpolationParameters.prototype);
-        return params;
-    };
-
-    //Parameters needed for dense output/interpolation when using Dormand-Prince
-    /**
-     * @deprecated
-     * @type {InterpolationParameters}
-     */
-    s.DormandPrinceInterpolator = (function () {
-        var params = InterpolationParameters();
-        /*
-         // Last row of the Butcher-array internal weights, elements 0-5.
-         params.A70 =    35.0 /  384.0;
-         // element 1 is zero, so it is neither stored nor used
-         params.A72 =   500.0 / 1113.0;
-         params.A73 =   125.0 /  192.0;
-         params.A74 = -2187.0 / 6784.0;
-         params.A75 =    11.0 /   84.0;
-
-         // Shampine (1986) Dense output, elements 0-6.
-         params.D0 =  -12715105075.0 /  11282082432.0;
-         // element 1 is zero
-         params.D2 =   87487479700.0 /  32700410799.0;
-         params.D3 =  -10690763975.0 /   1880347072.0;
-         params.D4 =  701980252875.0 / 199316789632.0;
-         params.D5 =   -1453857185.0 /    822651844.0;
-         params.D6 =      69997945.0 /     29380423.0;
-         */
-        //Interpolation State Vectors
-        params.V1 = [];
-        params.V2 = [];
-        params.V3 = [];
-        params.V4 = [];
-
-        params.initialized = false;
-
-        params.initialize = function (Ki) {
-            if (!params.initialized) {
-                var dim = Ki[0].length;
-                var k0, k2, k3, k4, k5, k6;
-                var V1 = params.V1;
-                var V2 = params.V2;
-                var V3 = params.V3;
-                var V4 = params.V4;
-
-                /* Last row of the Butcher-array internal weights, elements 0-5. */
-                var A70 = 35.0 / 384.0;
-                // element 1 is zero, so it is neither stored nor used
-                var A72 = 500.0 / 1113.0;
-                var A73 = 125.0 / 192.0;
-                var A74 = -2187.0 / 6784.0;
-                var A75 = 11.0 / 84.0;
-
-                /* Shampine (1986) Dense output, elements 0-6. */
-                var D0 = -12715105075.0 / 11282082432.0;
-                // element 1 is zero
-                var D2 = 87487479700.0 / 32700410799.0;
-                var D3 = -10690763975.0 / 1880347072.0;
-                var D4 = 701980252875.0 / 199316789632.0;
-                var D5 = -1453857185.0 / 822651844.0;
-                var D6 = 69997945.0 / 29380423.0;
-
-                for (var i = 0; i < dim; ++i) {
-                    k0 = Ki[0][i];
-                    k2 = Ki[2][i];
-                    k3 = Ki[3][i];
-                    k4 = Ki[4][i];
-                    k5 = Ki[5][i];
-                    k6 = Ki[6][i];
-
-                    V1[i] = A70 * k0 + A72 * k2 + A73 * k3 + A74 * k4 + A75 * k5;
-                    V2[i] = k0 - V1[i];
-                    V3[i] = V1[i] - V2[i] - k6;
-                    V4[i] = D0 * k0 + D2 * k2 + D3 * k3 + D4 * k4 + D5 * k5 + D6 * k6;
-                }
-                params.initialized = true;
-            }
-        };
-        return params;
-    })();
-
-    //Provides the coefficients for Dormand-Prince integration
-    /**
-     *
-     * @type {IntegratorParameters}
-     * @description Holds an object containing the parameters needed for the integrator to integrate using the Dormand-Prince method
-     */
-
-    /**
-     * @description Contains the parameters and coefficients for integration using the Dormand-Prince method
-     * @type {IntegratorParameters}
-     */
-    s.DormandPrince45Integrator = (function () {
-        //Coefficients for  RK45/Dormand-Prince integration
-        var A = [
-            [1.0 / 5.0],
-            [3.0 / 40.0, 9.0 / 40.0],
-            [44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0],
-            [19372.0 / 6561.0, -25360.0 / 2187.0, 64448.0 / 6561.0, -212.0 / 729.0],
-            [9017.0 / 3168.0, -355.0 / 33.0, 46732.0 / 5247.0, 49.0 / 176.0, -5103.0 / 18656.0],
-            [35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0, -2187.0 / 6784.0, 11.0 / 84.0]
-        ];
-
-        var B = [35.0 / 384.0, 0.0, 500.0 / 1113.0, 125.0 / 192.0, -2187.0 / 6784.0, 11.0 / 84.0, 0.0];
-        var BError = [5179 / 57600, 0, 7571 / 16695, 393 / 640, -92097 / 339200, 187 / 2100, 1 / 40];
-
-
-        var C = [1.0 / 5.0, 3.0 / 10.0, 4.0 / 5.0, 8.0 / 9.0, 1.0, 1.0];
-
-        var DPparams = IntegratorParameters(A, B, C);
-        DPparams.BError = BError;
-        DPparams.order = 5;
-        DPparams.firstSameAsLast = true;
-        return DPparams;
-    })();
 
     /**
      * @description Integrates one time step in the differential equation. If the calculated result has error outside specified tolerances, the step is rejected and recomputed with a smaller step size until the error is sufficiently small.
@@ -489,6 +398,7 @@ var solver = (function () {
         var C = IntegratorParams.C;
 
 
+
         var dims = DEParams.dims;
         var stages = IntegratorParams.stages;
         var t = DEParams.currentTime;
@@ -499,7 +409,6 @@ var solver = (function () {
         var dt = DEParams.dt;
         var tf = DEParams.tf;
         var firstSameAsLast = IntegratorParams.firstSameAsLast;
-        var firstStep = DEParams.firstStep;
         var finalStep = DEParams.finalStep;
         var yDotStart = DEParams.yDotStart;
         var yDotEnd;
@@ -508,30 +417,28 @@ var solver = (function () {
         var solution = [];
         var solutionForErrorEstimation = [];
         var rejectStep = false;
-        var errors = {
-            absoluteError: 0,
-            relativeError: 0,
-            percentError: 0
-        };
+        var rejection = 0;
+        var errors;
 
 
         /**
          * If we don't already have the derivative from the previous step, calculate it.
          * Many methods, including Dormand-Prince have the property that the derivative calculated for the final stage of the previous step can be reused here to save a call to ydot
          */
-            if(!firstSameAsLast || firstStep || (yDotStart === 'undefined')) {
+            if(!firstSameAsLast || DEParams.firstStep || (yDotStart === 'undefined')) {
                 yDotStart = ydot(t, y);
-                firstStep = false;
+                DEParams.firstStep = false;
             }
 
        do{
-        yDotStart.forEach(function (v, i, a) {
-            var k = v * dt;
-            Ki[0][i] = k;
-            solution[i] = y[i] + (B[0] * k);
-            solutionForErrorEstimation[i] = y[i] + (BError[0] * k);
+           for(var d = 0; d < dims; ++d){
+               var k = yDotStart[d] * dt;
+               Ki[0][d] = k;
+               solution[d] = y[d] + (B[0] * k);
+               solutionForErrorEstimation[d] = y[d] + (BError[0] * k);
 
-        });
+           }
+
 
             //Calculate the rest of the K-values
             for (var stage = 1; stage < stages; ++stage) {
@@ -543,34 +450,36 @@ var solver = (function () {
                     }
                 }
                 yDotTmp = ydot(t + (C[stage - 1] * dt), yTmp);
-                yDotTmp.forEach(function (v, i, a) {
-                    var k = v * dt;
-                    Ki[stage][i] = k;
-
-                    solution[i] += B[stage] * k;
-                    solutionForErrorEstimation[i] += BError[stage] * k;
-                });
+                for(var d = 0; d < dims; ++d){
+                    var k = yDotTmp[d] * dt;
+                    Ki[stage][d] = k;
+                    solution[d] += B[stage] * k;
+                    solutionForErrorEstimation[d] += BError[stage] * k;
+                }
             }
-            //er = estimateError(DEParams, Ki, y, solution, dt );
+
             errors = estimateErrors(solution, solutionForErrorEstimation, dt);
-            rejectStep = isStepGood(DEParams, solutionForErrorEstimation, errors, dt);
+            rejectStep = isStepGood(DEParams, solutionForErrorEstimation, errors, dt, rejection);
             if(rejectStep){
-                console.log("step rejected");
-                console.log("Time: %d    DT: %d    Error: %d", t, dt, Math.max.apply(Math, errors.absoluteError));
+                rejection++;
                 dt = rejectStep;
                 DEParams.dt = dt;
             }
-        }while(rejectStep)
+        }while(rejectStep);
 
         for(var dim = 0; dim < dims; ++dim){
             DEParams.previousState[dim] = y[dim];
             DEParams.state[dim] = solution[dim];
-            DEParams.rkError[dim] = (solution[dim] - solutionForErrorEstimation[dim]);
+            DEParams.rkError[dim] = solutionForErrorEstimation[dim];
             DEParams.Ki = Ki;
-            DEParams.error = errors;
+            DEParams.error.relativeError[dim] = errors.relativeError[dim];
+            DEParams.error.absoluteError[dim] = errors.absoluteError[dim];
         }
+
+        DEParams.error.relativeNorm = errors.relativeNorm;
         DEParams.yDotStart = yDotStart;
         DEParams.yDotEnd = yDotTmp;
+        DEParams.rejectedSteps += rejection;
 
         if(finalStep){
             DEParams.finished = true;
@@ -674,7 +583,7 @@ var solver = (function () {
         var aError = [];
         var rError = [];
         var beta = [];
-
+        var rNorm = 0;
 
 
         for(var dim = 0; dim < dims; ++dim){
@@ -683,22 +592,29 @@ var solver = (function () {
             var diff =  Math.abs(sol - solE);
             aError[dim] = diff;
             beta[dim] = diff / dt;
-            rError[dim] = diff/Math.abs(solE);
+            rError[dim] = diff/Math.abs(sol);
+            rNorm += Math.pow(Math.abs(diff/sol), dims);
         }
+        var relNorm = Math.pow(rNorm, (1/dims));
         return {
             absoluteError: aError,
-            relativeError: rError
+            relativeError: rError,
+            relativeNorm: relNorm
         };
 
 
     };
 
-    var isStepGood = function(DEParams, solution, errors, dt){
+    var isStepGood = function(DEParams, solution, errors, dt, rejected){
         "use strict"
         var atol = DEParams.atol;
         var rtol = DEParams.rtol;
         var absErr = errors.absoluteError;
         var relErr = errors.relativeError;
+        var rN = errors.relativeNorm;
+        var safetyFactor = DEParams.safetyFactor;
+        var minReduction = 1/(Math.pow(2,rejected));
+        var dims = DEParams.dims;
 
         var badAbs = 0;
         var badRel = 0;
@@ -709,6 +625,11 @@ var solver = (function () {
         var newDt = 0;
         var absDt = 0;
         var relDt = 0;
+        var Dts = [];
+
+        var errNorm = Math.max.apply(Math, absErr);
+        var solNorm = 0;
+        var sN = 0;
 
         for(var dim = 0; dim < absErr.length; ++dim){
             var at = atol[dim] || atol;
@@ -718,21 +639,25 @@ var solver = (function () {
                 absDim = dim;
                 badAt = at;
             }
-            if((relErr[dim] > rt) && (relErr[dim] > badRel)){
-                badRel = relErr[dim];
-                relDim = dim;
-                badRt = rt;
-            }
         }
-
+        if(badAbs === 0){ //&& badRel === 0){
+            return 0;
+        }
         if(badAbs !== 0){
-        absDt = Math.pow((badAt * Math.abs(dt))/badAbs, 1/5);
+            absDt = Math.pow((badAt * Math.abs(dt))/badAbs, 1/5) * safetyFactor;
+            Dts.push(absDt);
         }
         if(badRel !== 0){
-        relDt = Math.pow((badRt * Math.abs(solution[relDim]) * Math.abs(dt) / absErr[relDim]), 1/5);
+           // relDt = Math.pow((badRt * sN * Math.abs(dt) / errNorm), 1/5) * safetyFactor;
+           // Dts.push(relDt);
         }
-       newDt = Math.min(absDt, relDt);
+        newDt = Math.min.apply(Math, Dts);
+        var delta = newDt/dt;
+        if((delta > minReduction) || (newDt > dt)){
+            newDt = minReduction * dt;
+        }
         return newDt;
+
     };
     var estimateError = function (DEParams, KiVal, yVal, yNVal, dtNow) {
         "use strict"
@@ -835,7 +760,7 @@ var solver = (function () {
         var rtol = DEParams.rtol;
         var absErr = DEParams.error.absoluteError;
         var relErr = DEParams.error.relativeError;
-        var solution = DEParams.state;
+        var solution = DEParams.rkError;
         var safetyFactor = DEParams.safetyFactor;
         var maxGrowth = DEParams.maxGrowth;
         var minReduction = DEParams.minReduction;
@@ -850,12 +775,13 @@ var solver = (function () {
         var relDt = [];
         var dt = Math.abs(DEParams.dt);
         var newDt = 0;
-
+        var solN = Math.max.apply(Math, solution);
+        var absEN = Math.max.apply(Math, relErr);
         for(var dim = 0; dim < absErr.length; ++dim){
             var at = atol[dim] || atol;
             var rt = rtol[dim] || rtol;
-            absDt[dim] = Math.pow((at * dt)/absErr[dim], 1/5) * safetyFactor;
-            relDt[dim] = Math.pow((rt * Math.abs(solution[dim]) * dt) / absErr[dim], 1/5) * safetyFactor;
+            absDt[dim] = Math.pow((at * dt)/absErr[dim], 1/5);
+            relDt[dim] = Math.pow((rt * Math.abs(solN)) / (absEN/dt), 1/5);
         }
 
 
@@ -866,6 +792,7 @@ var solver = (function () {
         if(change > maxGrowth){
             newDt = dt * maxGrowth;
         }
+        newDt = newDt * safetyFactor;
         if(change < minReduction){
             newDt = dt * minReduction;
         }
@@ -933,8 +860,6 @@ var solver = (function () {
         }
 
 
-
-
         //For each dimension, we know y_n, y'_n, y_n+1, y'_n+1, and now y_n+0.5. We can also find y'_n+0.5
         //These points will be used to find a quintic interpolating polynomial for the interval
         var Kmidp = DEFunc(tM, midpoint);
@@ -997,37 +922,11 @@ var solver = (function () {
 
             //Take these interpolating coefficients and use them to curry the interpolating function.
             //The array interpTable will contain one instance of the function for each dimension in the system of differential equations.
-            //TODO: If performance here is bad, consider just returning the coefficients and constructing the function as needed.
 
             interpTable[i] = hermitePoly.bind(undefined,z0, z2, z4, fz0, fz01, fz012, fz0123, fz01234, fz012345);
         }
         return interpTable;
     };
-    
-    var getInverseInterpolatingFunctions = function (DEParams){
-        "use strict"
-        var dt = DEParams.dt;
-        var t0 = DEParams.previousTime;
-        var tF = DEParams.currentTime;
-        var yDot0= DEParams.yDotStart;
-        var yDotF = DEParams.yDotEnd;
-        var Ki = DEParams.Ki;
-        var DEFunc = DEParams.ydot;
-        var y0 = DEParams.previousState;
-        var yNext = DEParams.state;
-
-       var invHermitePoly = function(y0, t0, yF, tF, yDot0, yDotF, y){
-           var f = ((((y-yF)*(y-yF))/((y0 - yF)*(y0 - yF)*(y0 - yF))) * (3*y0 - yF - 2*y) * t0) + ((((y-y0)*(y-y0))/((yF-y0)*(yF-y0)*(yF-y0))) * (3*yF - y0 - 2*y) * tF) + ((y-y0)*(((y-yF)*(y-yF))/((y0-yF)*(y0-yF))) * (1/yDot0)) + ((y-yF)*(((y-y0)*(y-y0))/((yF-y0)*(yF-y0))) * (1/yDotF));
-           return f;
-       };
-
-        var invIntTable = [];
-        for(var i = 0; i < yDot0.length; ++i){
-            invIntTable[i] = invHermitePoly.bind(undefined, y0[i], t0, yNext[i], tF, yDot0[i], yDotF[i]);
-        }
-        return invIntTable;
-    };
-
 
     return s;
 

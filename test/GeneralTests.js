@@ -160,13 +160,9 @@ GeneralTest.prototype.testSolverFunction = function () {
     var stepSize = 1;
 
     var results = s.modularSolver(func, initialCond, startTime,endTime, 0.001, 0.001, undefined);
-    /*results.y.forEach(function (value, index, array) {
+    results.y.forEach(function (value, index, array) {
         assertEquals("Length of time vector and all solutions should be equal", results.t.length, value.length);
-    });*/
-    /*results.yVals.forEach(function(v,i,a){
-        console.log(v);
-    });  */
-    console.log(results);
+    });
 };
 /**
  * Test to make sure nothing strange happens with a system of differential equations.
@@ -187,8 +183,6 @@ GeneralTest.prototype.testSystemOfDifferentialEquations = function () {
     var results = s.modularSolver(func, initialCond, startTime, endTime,0.001, 0.001, undefined);
     assertEquals("Solution should contain 3 dimensions", initialCond.length, results.yVals.length);
     assertEquals("Length of time vector and all solutions should be equal", results.tVals.length, results.yVals[2].length);
-
-    //TODO: Check to see if these results are correct. The solver may not choke, but may return bad results
 };
 
 /**
@@ -205,10 +199,10 @@ GeneralTest.prototype.testInvalidStepResults = function () {
     var validDE = this.simpleDE.func;
 
     assertException("Functions representing differential equations may not return NaN or +/- Infinity", function () {
-        return s.eulerStep(invalidResultsFunction, 1, [3], .5);
+        return s.modularSolver(invalidResultsFunction, [3], 0, 1);
     }, new TypeError());
     assertNoException("Differential Equations may return any number other than NaN or +/- Infinity", function () {
-        return s.eulerStep(validDE, 0, [1], 1);
+        return s.modularSolver(validDE, [1], 0, 1);
     });
 };
 //does the numeric solution match the analytic solution?
@@ -220,16 +214,14 @@ GeneralTest.prototype.testAnalyticSolution = function(){
     var start = 0;
     var end = 25;
     var stepSize = 0.1;
+    var tol = 1e-10;
 
-    var numSoln = s.modularSolver(testDE, initCond, start, end, 1e-10, 1e-10, undefined);
+    var numSoln = s.modularSolver(testDE, initCond, start, end, tol, tol, undefined);
 
     var analSoln = solution(numSoln.tVals, initCond);
 
 
-    /**
-     * Just an interim method of checking the results. Investigating other methods of comparing the error between the
-     * numerical method and the analytical solution to determine correctness.
-     */
+
     var totalError = [0,0];
     numSoln.yVals[0].forEach(function(value, index, array){
         var errorSq1 = Math.pow(value - analSoln[0][index], 2);
@@ -241,12 +233,7 @@ GeneralTest.prototype.testAnalyticSolution = function(){
     var rmsError = [];
     rmsError[0] = Math.sqrt(totalError[0]/numSoln.yVals[0].length);
     rmsError[1] = Math.sqrt(totalError[1]/numSoln.yVals[1].length);
-    console.log("RMS Error for state 1: %d", rmsError[0]);
-    console.log("RMS Error for state 2: %d", rmsError[1]);
-    /*console.log(numSoln.y[0]);
-    console.log(analSoln[0]);
-    console.log(numSoln.y[1]);
-    console.log(analSoln[1]);*/
-
+    assertLess(rmsError[0],tol);
+    assertLess(rmsError[0],tol);
 
 };
